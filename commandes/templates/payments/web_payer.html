@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payer {{ offre.nom }} - Couturier Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; margin: 0; }
+        .btn-primary {
+            background-color: #E91E63; color: white; padding: 12px 20px; border-radius: 9999px;
+            font-weight: bold; cursor: pointer; border: none; font-size: 14px; width: 100%;
+        }
+        .btn-primary:hover { background-color: #D81B60; }
+        .provider-option {
+            display: block; border: 1.5px solid rgba(255,255,255,0.1); border-radius: 14px;
+            padding: 14px 16px; margin-bottom: 10px; cursor: pointer; background-color: #1E1E1E;
+        }
+        .provider-option input { margin-right: 10px; }
+        input[type="text"], input[type="tel"] {
+            width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12);
+            background-color: #1E1E1E; color: white; font-size: 14px; box-sizing: border-box;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="max-w-md mx-auto px-4 py-8">
+        <a href="{% url 'web_recharge' %}" style="color:#a3a3a3; font-size:13px; text-decoration:none;">&larr; Retour</a>
+
+        <div class="bg-[#1E1E1E] p-6 rounded-2xl border border-white/10 my-6" style="background-color:#1E1E1E; border:1px solid rgba(255,255,255,0.1);">
+            <h2 class="text-lg font-bold mb-1">{{ offre.nom }}</h2>
+            <p class="text-sm text-gray-400 mb-1" style="color:#a3a3a3;">{{ offre.duree_jours }} jours d'accès Premium</p>
+            <p class="text-2xl font-black mt-2" style="color:#E91E63;">{{ offre.prix }} FCFA</p>
+        </div>
+
+        {% if error %}
+        <div class="mb-4 px-4 py-3 rounded-xl text-sm" style="background-color: rgba(239,68,68,0.1); color:#f87171; border: 1px solid rgba(239,68,68,0.2);">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST">
+            {% csrf_token %}
+
+            <p class="text-xs uppercase tracking-wider text-gray-400 mb-3" style="color:#a3a3a3;">Choisis ton opérateur</p>
+
+            {% for code, label in providers.items %}
+            <label class="provider-option">
+                <input type="radio" name="provider" value="{{ code }}" required>
+                {{ label }}
+            </label>
+            {% endfor %}
+
+            <p class="text-xs uppercase tracking-wider text-gray-400 mt-5 mb-2" style="color:#a3a3a3;">Numéro de téléphone</p>
+            <div style="display:flex; align-items:stretch; gap:8px;">
+                <span style="background-color:#2a2a2a; padding:12px 14px; border-radius:10px; font-size:14px; color:#a3a3a3; display:flex; align-items:center;">+225</span>
+                <input type="tel" name="phone_local" value="{{ default_phone_local }}" placeholder="0700000000" required style="flex:1;">
+            </div>
+
+            <button type="submit" class="btn-primary mt-6">Payer maintenant</button>
+        </form>
+
+        <p class="text-xs text-gray-600 mt-6 text-center" style="color:#5c5c5c;">
+            Tu recevras une demande de validation directement sur ton téléphone.
+        </p>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,112 @@
+{% if request.GET.format != "raw" %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dress's Matter | CGU</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Montserrat:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8f5f0;
+            --text-color: #1a1a1a;
+            --accent-gold: #bda27e;
+            --tape-color: #f1c40f;
+        }
+        body {
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Montserrat', sans-serif;
+            overflow-x: hidden;
+        }
+        #tape-svg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1; pointer-events: none;
+        }
+        .main-wrapper {
+            position: relative;
+            min-height: 100vh;
+            padding: 80px 20px;
+        }
+        .container {
+            position: relative;
+            z-index: 2;
+            max-width: 700px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(5px);
+            padding: 60px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.05);
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+        #tape-foreground {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 3; pointer-events: none; opacity: 0.15;
+        }
+        header { text-align: center; margin-bottom: 50px; }
+        h1 { font-family: 'Playfair Display', serif; font-size: 3em; letter-spacing: -1px; margin: 0; }
+        .content h2 {
+            font-family: 'Playfair Display', serif;
+            color: var(--accent-gold);
+            font-size: 1.5em;
+            margin-top: 40px;
+            border-bottom: 1px dashed var(--accent-gold);
+        }
+        .content p { line-height: 1.8; font-weight: 300; }
+        .content ul { list-style: none; padding-left: 0; }
+        .content li { padding-left: 25px; position: relative; margin-bottom: 10px; }
+        .content li::before {
+            content: ''; position: absolute; left: 0; top: 12px;
+            width: 15px; height: 1px; background: var(--accent-gold);
+        }
+    </style>
+</head>
+<body>
+{% endif %}
+
+    <div class="main-wrapper">
+        {% if request.GET.format != "raw" %}
+        <svg id="tape-svg" preserveAspectRatio="none" viewBox="0 0 100 1000">
+            <path id="back-path" d="M20,0 Q80,250 20,500 T20,1000" fill="none" stroke="#f1c40f" stroke-width="8" stroke-dasharray="0.5,1" />
+        </svg>
+        {% endif %}
+
+        <div class="container">
+            <header>
+                <h1>Dress's Matter</h1>
+                <p style="color: var(--accent-gold); letter-spacing: 3px; font-size: 0.8em; text-transform: uppercase;">Confidentialité & Mesures</p>
+            </header>
+
+            <div class="content">
+                <p style="font-style: italic; text-align: center;">Mise à jour : {{ cgu.derniere_mise_a_jour|date:"d F Y" }}</p>
+                {{ cgu.contenu|safe }}
+            </div>
+        </div>
+
+        {% if request.GET.format != "raw" %}
+        <svg id="tape-foreground" preserveAspectRatio="none" viewBox="0 0 100 1000">
+            <path id="front-path" d="M20,0 Q80,250 20,500 T20,1000" fill="none" stroke="#f1c40f" stroke-width="8" stroke-dasharray="0.5,1" />
+        </svg>
+        {% endif %}
+    </div>
+
+{% if request.GET.format != "raw" %}
+    <script>
+        const backPath = document.getElementById('back-path');
+        const frontPath = document.getElementById('front-path');
+        window.addEventListener('scroll', () => {
+            const scroll = window.pageYOffset * 0.05;
+            const d = `M${20 + Math.sin(scroll * 0.1) * 10},0 
+                       Q${80 + Math.cos(scroll * 0.1) * 20},250 
+                       ${20 + Math.sin(scroll * 0.2) * 15},500 
+                       T${20 + Math.cos(scroll * 0.1) * 10},1000`;
+            backPath.setAttribute('d', d);
+            frontPath.setAttribute('d', d);
+        });
+    </script>
+</body>
+</html>
+{% endif %}

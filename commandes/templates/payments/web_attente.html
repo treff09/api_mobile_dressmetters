@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paiement en cours - Couturier Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; margin: 0; }
+        .pulse-dot {
+            width: 10px; height: 10px; border-radius: 999px; background-color: #E91E63;
+            animation: pulse 1.4s ease-in-out infinite; display: inline-block; margin-right: 8px;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(1.4); } }
+        .btn-primary {
+            background-color: #E91E63; color: white; padding: 12px 20px; border-radius: 9999px;
+            font-weight: bold; cursor: pointer; border: none; font-size: 14px; width: 100%; text-align: center;
+            text-decoration: none; display: block;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="max-w-md mx-auto px-4 py-10 text-center">
+
+        <div id="state-pending">
+            <div class="mb-6">
+                <span class="pulse-dot"></span>
+                <span class="text-xs uppercase tracking-wider" style="color:#a3a3a3;">En attente de validation</span>
+            </div>
+            <h2 class="text-xl font-bold mb-2">Vérifie ton téléphone</h2>
+            <p class="text-sm text-gray-400" style="color:#a3a3a3;">
+                Une demande de paiement {{ provider_label }} a été envoyée sur ton appareil.
+                Valide-la avec ton code pour confirmer.
+            </p>
+            <p class="text-xs mt-4" style="color:#5c5c5c;">Réf. {{ order_id }}</p>
+        </div>
+
+        <div id="state-success" class="hidden">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style="background-color: rgba(34,197,94,0.15); color:#4ade80;">✓</div>
+            <h2 class="text-xl font-bold mb-2">Paiement réussi</h2>
+            <p class="text-sm text-gray-400 mb-6" style="color:#a3a3a3;" id="success-message"></p>
+            <a href="{% url 'web_recharge' %}" class="btn-primary">Retour à mon abonnement</a>
+        </div>
+
+        <div id="state-failed" class="hidden">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style="background-color: rgba(239,68,68,0.15); color:#f87171;">✕</div>
+            <h2 class="text-xl font-bold mb-2">Paiement échoué</h2>
+            <p class="text-sm text-gray-400 mb-6" style="color:#a3a3a3;">Le paiement n'a pas abouti. Tu peux réessayer.</p>
+            <a href="{% url 'web_recharge' %}" class="btn-primary">Retour à mon abonnement</a>
+        </div>
+
+    </div>
+
+    <script>
+        const orderId = "{{ order_id }}";
+        const confirmUrl = "{% url 'web_confirmer_paiement' order_id %}";
+        const maxAttempts = 40; // ~2 minutes à 3s d'intervalle
+        let attempts = 0;
+
+        function showState(id) {
+            document.getElementById('state-pending').classList.add('hidden');
+            document.getElementById('state-success').classList.add('hidden');
+            document.getElementById('state-failed').classList.add('hidden');
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        async function poll() {
+            attempts++;
+            try {
+                const res = await fetch(confirmUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const data = await res.json();
+
+                if (data.status === 'SUCCESSFUL') {
+                    document.getElementById('success-message').textContent =
+                        (data.message || 'Ton abonnement est actif') + ' — expire le ' + data.expire_le;
+                    showState('state-success');
+                    return;
+                }
+                if (data.status === 'FAILED') {
+                    showState('state-failed');
+                    return;
+                }
+            } catch (e) {
+                // erreur réseau ponctuelle : on continue de réessayer silencieusement
+            }
+
+            if (attempts >= maxAttempts) {
+                showState('state-failed');
+                return;
+            }
+            setTimeout(poll, 3000);
+        }
+
+        poll();
+    </script>
+
+</body>
+</html>

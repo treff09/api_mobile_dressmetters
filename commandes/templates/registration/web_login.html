@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - Couturier Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Sécurité au cas où le script Tailwind met du temps à s'appliquer */
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; }
+        .fallback-btn { background-color: #E91E63; color: white; padding: 12px; border-radius: 9999px; width: 100%; font-weight: bold; cursor: pointer; border: none; }
+    </style>
+</head>
+<body class="bg-[#121212] text-white flex items-center justify-center min-h-screen m-0">
+
+    <div class="w-full max-w-md p-6 bg-[#1E1E1E] rounded-2xl border border-white/10 shadow-2xl mx-4" style="background-color: #1E1E1E; border: 1px solid rgba(255,255,255,0.1);">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-black text-[#E91E63] tracking-wider uppercase" style="color: #E91E63; font-weight: 900;">COUTURIER DIGITAL</h1>
+            <p class="text-gray-400 text-sm mt-2" style="color: #a3a3a3;">Connectez-vous pour gérer votre abonnement</p>
+        </div>
+
+        <form method="POST" class="space-y-5">
+            {% csrf_token %}
+            
+            {% if form.errors %}
+            <div class="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm" style="background-color: rgba(239,68,68,0.1); color: #f87171; padding: 12px; border-radius: 12px; margin-bottom: 15px;">
+                Identifiants de connexion incorrects.
+            </div>
+            {% endif %}
+
+            {% if error_message %}
+            <div class="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-sm" style="background-color: rgba(239,68,68,0.1); color: #f87171; padding: 12px; border-radius: 12px; margin-bottom: 15px;">
+                {{ error_message }}
+            </div>
+            {% endif %}
+
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2" style="color: #a3a3a3; font-size: 12px; font-weight: bold;">Nom d'utilisateur</label>
+                <input type="text" name="username" required class="w-full bg-[#2A2A2A] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#E91E63] transition-all" style="width: 100%; background-color: #2A2A2A; color: white; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box;">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2" style="color: #a3a3a3; font-size: 12px; font-weight: bold;">Mot de passe</label>
+                <input type="password" name="password" required class="w-full bg-[#2A2A2A] border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#E91E63] transition-all" style="width: 100%; background-color: #2A2A2A; color: white; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); box-sizing: border-box;">
+            </div>
+
+            <button type="submit" class="fallback-btn w-full bg-[#E91E63] hover:bg-[#D81B60] text-white font-bold py-3.5 rounded-full transition-all tracking-wide text-sm shadow-lg shadow-[#E91E63]/20">
+                SE CONNECTER
+            </button>
+        </form>
+    </div>
+
+</body>
+</html>

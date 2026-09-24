@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Espace Rechargement - Couturier Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-[#121212] text-white font-sans antialiased">
+
+    <div class="max-w-md mx-auto px-4 py-8">
+        <div class="bg-[#1E1E1E] p-6 rounded-2xl border border-white/10 mb-6 text-center">
+            <h2 class="text-xl font-bold mb-1">Mon Atelier Digital 🧵</h2>
+            <p class="text-gray-400 text-sm mb-4">{{ email }}</p>
+            <div class="inline-block bg-green-500/10 text-green-400 font-bold px-4 py-2 rounded-xl text-sm border border-green-500/20">
+                Solde actuel : {{ solde_points }} PTS
+            </div>
+        </div>
+
+        <h3 class="text-gray-400 font-bold text-xs uppercase tracking-wider mb-4">Choisissez un forfait de recharge</h3>
+
+        {% for offer in offers %}
+        <div class="bg-[#1E1E1E] p-6 rounded-2xl border border-white/5 mb-4 flex flex-col justify-between">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h4 class="text-lg font-bold text-white">{{ offer.nom }}</h4>
+                    <p class="text-xs text-gray-400 mt-1">Crédit immédiat sur votre application mobile</p>
+                </div>
+                <span class="bg-white/10 text-white text-xs font-bold px-2 py-1 rounded">{{ offer.points }} PTS</span>
+            </div>
+            
+            <div class="border-t border-white/5 pt-4 flex items-center justify-between">
+                <span class="text-xl font-black text-green-400">{{ offer.prix_fcfa }} FCFA</span>
+                
+                <a href="#" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-sm px-4 py-2 rounded-full transition-all">
+                    Payer maintenant
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+</body>
+</html>

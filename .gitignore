@@ -1,0 +1,57 @@
+# Environnement virtuel
+
+venv/
+env/
+ENV/
+
+# Cache Python
+
+**pycache**/
+*.pyc
+*.pyo
+*.pyd
+
+# Fichiers secrets
+media/
+.env
+*.env
+
+# Base de données locale
+
+db.sqlite3
+
+# Logs
+
+*.log
+
+# Fichiers système
+
+.DS_Store
+Thumbs.db
+
+# Dossiers IDE
+
+.vscode/
+.idea/
+
+# Fichiers temporaires
+
+*.swp
+*.swo
+
+# Dossier de build
+
+build/
+dist/
+
+# Fichiers statiques collectés (Django)
+
+staticfiles/
+
+# migrations compilées
+
+*.sqlite3
+
+# Node (si tu utilises frontend)
+
+node_modules/

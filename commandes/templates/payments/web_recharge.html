@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mon abonnement - Couturier Digital</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #121212; color: #ffffff; font-family: sans-serif; margin: 0; }
+        .btn-primary {
+            background-color: #E91E63; color: white; padding: 12px 20px; border-radius: 9999px;
+            font-weight: bold; cursor: pointer; border: none; font-size: 14px;
+        }
+        .btn-primary:hover { background-color: #D81B60; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div class="max-w-md mx-auto px-4 py-8">
+
+        <div class="flex items-center justify-between mb-6">
+            <a href="/" style="color:#a3a3a3; font-size:13px; text-decoration:none;">&larr; Accueil</a>
+        </div>
+
+        <div class="bg-[#1E1E1E] p-6 rounded-2xl border border-white/10 mb-6 text-center" style="background-color:#1E1E1E; border:1px solid rgba(255,255,255,0.1);">
+            <h2 class="text-xl font-bold mb-1">{{ entreprise }} 🧵</h2>
+            <p class="text-gray-400 text-sm mb-4" style="color:#a3a3a3;">{{ email }}</p>
+
+            {% if abonnement_actif %}
+            <div class="inline-block px-4 py-2 rounded-xl text-sm font-bold" style="background-color: rgba(217,164,65,0.15); color:#F0CE85; border: 1px solid rgba(217,164,65,0.3);">
+                ⭐ Premium actif — {{ jours_restants }} jour{{ jours_restants|pluralize }} restant{{ jours_restants|pluralize }}
+            </div>
+            <p class="text-xs text-gray-500 mt-3" style="color:#6b6b6b;">Se termine le {{ date_fin_abonnement|date:"d/m/Y" }}</p>
+            {% else %}
+            <div class="inline-block px-4 py-2 rounded-xl text-sm font-bold" style="background-color: rgba(239,68,68,0.1); color:#f87171; border: 1px solid rgba(239,68,68,0.2);">
+                Aucun abonnement actif
+            </div>
+            {% endif %}
+        </div>
+
+        <h3 class="text-gray-400 font-bold text-xs uppercase tracking-wider mb-4" style="color:#a3a3a3;">
+            {% if abonnement_actif %}Renouveler / changer d'offre{% else %}Choisissez une offre{% endif %}
+        </h3>
+
+        {% for offer in offers %}
+        <div class="p-6 rounded-2xl border border-white/5 mb-4 flex flex-col justify-between" style="background-color:#1E1E1E; border:1px solid rgba(255,255,255,0.06);">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <h4 class="text-lg font-bold text-white">{{ offer.nom }}</h4>
+                    <p class="text-xs text-gray-400 mt-1" style="color:#a3a3a3;">{{ offer.duree_jours }} jours d'accès Premium</p>
+                </div>
+            </div>
+
+            <div class="border-t border-white/5 pt-4 flex items-center justify-between" style="border-top:1px solid rgba(255,255,255,0.06);">
+                <span class="text-xl font-black" style="color:#E91E63;">{{ offer.prix }} FCFA</span>
+
+                <a href="{% url 'web_payer_abonnement' offer.id %}" class="btn-primary" style="text-decoration:none; display:inline-block;">
+                    {% if abonnement_actif %}Prolonger{% else %}Activer{% endif %}
+                </a>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-gray-400 text-sm" style="color:#a3a3a3;">Aucune offre disponible pour le moment.</p>
+        {% endfor %}
+
+        <p class="text-xs text-gray-600 mt-6 text-center" style="color:#5c5c5c;">
+            Paiement sécurisé par Mobile Money — MTN MoMo ou Orange Money.
+        </p>
+    </div>
+
+</body>
+</html>

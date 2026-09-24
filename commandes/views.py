@@ -813,10 +813,17 @@ class UploadTissuImageView(APIView):
             return Response({'error': 'Aucune image fournie. Champ attendu : image_tissu'}, status=400)
 
         # Valider le type de fichier
-        allowed_types = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-        if image.content_type not in allowed_types:
+        allowed_types = [
+            'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+            'image/gif', 'image/heic', 'image/heif',
+            'application/octet-stream',  # fallback camera Android
+        ]
+        # Vérification par extension si le content_type est inconnu
+        ext = image.name.split('.')[-1].lower() if '.' in image.name else ''
+        allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']
+        if image.content_type not in allowed_types and ext not in allowed_exts:
             return Response(
-                {'error': 'Format non supporté. Utilisez JPEG, PNG ou WebP.'},
+                {'error': f'Format non supporte ({image.content_type}). Utilisez JPEG, PNG ou WebP.'},
                 status=400
             )
 

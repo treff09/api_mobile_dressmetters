@@ -40,11 +40,49 @@ class LibelleMesureDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        # Un client ne peut modifier/supprimer que SES propres points
-        return LibelleMesure.objects.filter(client_profile__user=self.request.user)
+        # Peut accéder à ses points ET aux points système (lecture + mise à jour position)
+        return LibelleMesure.objects.filter(
+            Q(client_profile__user=self.request.user) |
+            Q(client_profile__isnull=True)
+        )
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Si c'est un point système, on ne modifie pas le libellé global
+        # On met juste à jour la valeur MesureClient pour ce client
+        if instance.client_profile is None:
+            try:
+                client_profile = request.user.client_profile
+            except Exception:
+                return Response(
+                    {"error": "Profil client introuvable."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            valeur = request.data.get("valeur")
+            position_x = request.data.get("position_x", instance.position_x)
+            position_y = request.data.get("position_y", instance.position_y)
+
+            if valeur is not None:
+                MesureClient.objects.update_or_create(
+                    client_profile=client_profile,
+                    libelle=instance,
+                    defaults={"valeur": valeur}
+                )
+
+            return Response({
+                "id": instance.id,
+                "nom": instance.nom,
+                "position_x": position_x,
+                "position_y": position_y,
+                "message": "Mesure mise à jour."
+            }, status=status.HTTP_200_OK)
+
+        # Point personnalisé du client : mise à jour normale
+        return super().partial_update(request, *args, **kwargs)
 
     def perform_destroy(self, instance):
-        # Sécurité supplémentaire : interdire la suppression si c'est un point système
         if instance.client_profile is None:
             raise exceptions.PermissionDenied("Impossible de supprimer un point système standard.")
         instance.delete()

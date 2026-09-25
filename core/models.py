@@ -81,6 +81,34 @@ class MesureClient(models.Model):
     def __str__(self):
         return f"{self.client_profile.user.username} - {self.libelle.nom}: {self.valeur}"
 
+
+class PositionGabaritClient(models.Model):
+    """
+    Stocke la position personnalisée (X, Y) d'un point du gabarit pour un client.
+    Permet à chaque client de déplacer les points système sans affecter les autres.
+    Si aucune entrée n'existe pour un point, la position par défaut du LibelleMesure est utilisée.
+    """
+    client_profile = models.ForeignKey(
+        ClientProfile,
+        on_delete=models.CASCADE,
+        related_name='positions_gabarit'
+    )
+    libelle = models.ForeignKey(
+        LibelleMesure,
+        on_delete=models.CASCADE,
+        related_name='positions_clients'
+    )
+    position_x = models.FloatField(default=0.0)
+    position_y = models.FloatField(default=0.0)
+
+    class Meta:
+        unique_together = ('client_profile', 'libelle')
+        verbose_name = "Position gabarit client"
+        verbose_name_plural = "Positions gabarit clients"
+
+    def __str__(self):
+        return f"{self.client_profile.user.username} - {self.libelle.nom}: ({self.position_x}, {self.position_y})"
+
 # ============================================================
 # PARTIE 3 : ABONNEMENTS
 # ============================================================

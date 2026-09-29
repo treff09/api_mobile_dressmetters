@@ -10,10 +10,45 @@ from django.db import transaction
 # PARTIE : MESURES DYNAMIQUES
 # ============================================================
 
+def genre_du_contexte(context):
+    """Genre de la silhouette à utiliser : contexte explicite, sinon celui du client."""
+    if context.get('genre'):
+        return context['genre']
+    request = context.get('request')
+    user = getattr(request, 'user', None)
+    profil = getattr(user, 'client_profile', None) if user and user.is_authenticated else None
+    return getattr(profil, 'genre', None) or 'F'
+
+
 class LibelleMesureSerializer(serializers.ModelSerializer):
+    """
+    position_x / position_y sont renvoyés POUR LA SILHOUETTE DU CLIENT
+    (homme ou femme). fin_x / fin_y ne sont remplis que pour une LONGUEUR.
+    """
+    fin_x = serializers.SerializerMethodField()
+    fin_y = serializers.SerializerMethodField()
+    personnalise = serializers.SerializerMethodField()
+
     class Meta:
         model = LibelleMesure
-        fields = ['id', 'nom', 'position_x', 'position_y', 'categorie']
+        fields = ['id', 'nom', 'cle', 'type_mesure', 'aide', 'ordre', 'label_t',
+                  'position_x', 'position_y', 'fin_x', 'fin_y', 'categorie',
+                  'afficher_par_defaut', 'personnalise']
+        read_only_fields = ['cle', 'ordre', 'afficher_par_defaut']
+
+    def _pos(self, obj):
+        return obj.positions_pour(genre_du_contexte(self.context))
+
+    def get_fin_x(self, obj): return self._pos(obj)[2]
+    def get_fin_y(self, obj): return self._pos(obj)[3]
+    def get_personnalise(self, obj):
+        return obj.client_profile_id is not None or obj.professional_profile_id is not None
+
+    def to_representation(self, obj):
+        data = super().to_representation(obj)
+        x, y, _, _ = self._pos(obj)
+        data['position_x'], data['position_y'] = x, y
+        return data
 class MesureClientSerializer(serializers.ModelSerializer):
     # Champ pour l'écriture (envoyé par Flutter)
     libelle_id = serializers.IntegerField(write_only=True)
@@ -54,9 +89,17 @@ class ValeurMesureSerializer(serializers.ModelSerializer):
 # ============================================================
 
 class TypeVetementSerializer(serializers.ModelSerializer):
+    mesures_requises = serializers.PrimaryKeyRelatedField(
+        many=True, required=False, queryset=LibelleMesure.objects.all()
+    )
+    personnalise = serializers.SerializerMethodField()
+
     class Meta:
         model = TypeVetement
-        fields = '__all__'
+        fields = ['id', 'nom', 'mesures_requises', 'personnalise']
+
+    def get_personnalise(self, obj):
+        return obj.professional_profile_id is not None
 
 class OffreAbonnementSerializer(serializers.ModelSerializer):
     class Meta:
@@ -72,16 +115,37 @@ class AbonnementSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ModeleDisponibleSerializer(serializers.ModelSerializer):
+    # Lecture : ids des mesures choisies pour ce modèle
+    mesures_requises = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
+    # Écriture : "12,15,18" (plus simple à envoyer en multipart depuis Flutter)
+    mesures_requises_ids = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
     class Meta:
         model = ModeleDisponible
-        fields = ['id', 'professional_profile', 'type_vetement', 'nom', 'description', 'image', 'price', 'acompte']
+        fields = ['id', 'professional_profile', 'type_vetement', 'nom', 'description', 'image', 'price', 'acompte',
+                  'mesures_requises', 'mesures_requises_ids']
         read_only_fields = ['professional_profile']
 
+    def _appliquer_mesures(self, modele, brut):
+        if brut is None:
+            return
+        ids = [int(x) for x in str(brut).replace(' ', '').split(',') if x.isdigit()]
+        modele.mesures_requises.set(LibelleMesure.objects.filter(id__in=ids))
+
     def create(self, validated_data):
+        brut = validated_data.pop('mesures_requises_ids', None)
         request = self.context.get('request')
         if request and hasattr(request.user, 'professional_profile'):
             validated_data['professional_profile'] = request.user.professional_profile
-        return super().create(validated_data)
+        modele = super().create(validated_data)
+        self._appliquer_mesures(modele, brut)
+        return modele
+
+    def update(self, instance, validated_data):
+        brut = validated_data.pop('mesures_requises_ids', None)
+        modele = super().update(instance, validated_data)
+        self._appliquer_mesures(modele, brut)
+        return modele
 
 # ============================================================
 # PARTIE : COMMANDES

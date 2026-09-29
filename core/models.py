@@ -51,10 +51,50 @@ class LibelleMesure(models.Model):
         null=True,   # Permet les mesures standards (système)
         blank=True   # Permet de ne pas remplir le champ dans l'admin/formulaires
     )
+    # Mesure créée par un couturier (visible uniquement par lui et ses clients)
+    professional_profile = models.ForeignKey(
+        'ProfessionalProfile',
+        on_delete=models.CASCADE,
+        related_name='mesures_perso',
+        null=True,
+        blank=True,
+    )
     nom = models.CharField(max_length=100)
     position_x = models.FloatField(default=0.0, help_text="Position horizontale en % sur le gabarit")
     position_y = models.FloatField(default=0.0, help_text="Position verticale en % sur le gabarit")
     categorie = models.CharField(max_length=50, default="Général", help_text="Ex: Haut, Bas, Accessoire")
+
+    # ── Bibliothèque de mesures (mode guidé) ─────────────────────────
+    TYPE_CHOICES = [('TOUR', 'Tour (point)'), ('LONGUEUR', 'Longueur (trait)')]
+    cle = models.CharField(max_length=50, blank=True, null=True, db_index=True,
+                           help_text="Identifiant stable, ex: tour_cou")
+    type_mesure = models.CharField(max_length=10, choices=TYPE_CHOICES, default='TOUR')
+    aide = models.CharField(max_length=200, blank=True, default='',
+                            help_text="Phrase affichée au client : comment prendre la mesure")
+    ordre = models.PositiveIntegerField(default=0)
+    # Afficher ce point sur la page « Mes mensurations » même sans valeur
+    afficher_par_defaut = models.BooleanField(default=True)
+    # Positions calées sur chaque silhouette (% du cadre du gabarit).
+    # Pour une LONGUEUR : position = point de départ, fin = point d'arrivée.
+    position_x_h = models.FloatField(null=True, blank=True)
+    position_y_h = models.FloatField(null=True, blank=True)
+    fin_x_h = models.FloatField(null=True, blank=True)
+    fin_y_h = models.FloatField(null=True, blank=True)
+    position_x_f = models.FloatField(null=True, blank=True)
+    position_y_f = models.FloatField(null=True, blank=True)
+    fin_x_f = models.FloatField(null=True, blank=True)
+    fin_y_f = models.FloatField(null=True, blank=True)
+    # Où placer le numéro le long du trait (0 = départ, 1 = arrivée)
+    label_t = models.FloatField(default=0.5)
+
+    def positions_pour(self, genre):
+        """Retourne (x, y, fin_x, fin_y) pour la silhouette du genre donné."""
+        homme = str(genre or '').strip().lower() in ('h', 'homme', 'm', 'masculin')
+        if homme and self.position_x_h is not None:
+            return self.position_x_h, self.position_y_h, self.fin_x_h, self.fin_y_h
+        if not homme and self.position_x_f is not None:
+            return self.position_x_f, self.position_y_f, self.fin_x_f, self.fin_y_f
+        return self.position_x, self.position_y, None, None
 
     class Meta:
         # MODIFICATION : La contrainte d'unicité doit être ajustée 
@@ -66,17 +106,53 @@ class LibelleMesure(models.Model):
         return f"{self.nom} ({owner})"
 
 
+class PersonneMesuree(models.Model):
+    """
+    Une personne dont le client garde les mesures : lui-même (« Moi »),
+    ses enfants, son conjoint… Ex : une maman qui commande pour Junior et Malik.
+    """
+    GENRE_CHOICES = [('H', 'Homme / garçon'), ('F', 'Femme / fille')]
+    client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name='personnes')
+    prenom = models.CharField(max_length=60)
+    genre = models.CharField(max_length=1, choices=GENRE_CHOICES, default='F')
+    est_moi = models.BooleanField(default=False)
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('client_profile', 'prenom')
+        ordering = ['-est_moi', 'prenom']
+
+    @staticmethod
+    def moi(client_profile):
+        """Retourne (et crée si besoin) la personne « Moi » du client."""
+        p = client_profile.personnes.filter(est_moi=True).first()
+        if p:
+            return p
+        g = str(client_profile.genre or '').strip().lower()
+        genre = 'H' if g in ('h', 'homme', 'm', 'masculin') else 'F'
+        prenom = 'Moi'
+        while client_profile.personnes.filter(prenom=prenom).exists():
+            prenom += ' '
+        return PersonneMesuree.objects.create(client_profile=client_profile, prenom=prenom, genre=genre, est_moi=True)
+
+    def __str__(self):
+        return f"{self.prenom} ({self.client_profile})"
+
+
 class MesureClient(models.Model):
     """
-    Stocke les mesures 'actuelles' du client.
+    Stocke les mesures 'actuelles' d'une personne suivie par le client.
     """
     client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name='mesures_dynamiques')
+    # Pour qui est cette mesure (Moi, Junior…). Toujours rempli par l'API.
+    personne = models.ForeignKey(PersonneMesuree, on_delete=models.CASCADE, related_name='mesures',
+                                 null=True, blank=True)
     libelle = models.ForeignKey(LibelleMesure, on_delete=models.CASCADE)
     valeur = models.DecimalField(max_digits=5, decimal_places=2, default=0.0)
     derniere_mise_a_jour = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('client_profile', 'libelle')
+        unique_together = ('client_profile', 'personne', 'libelle')
 
     def __str__(self):
         return f"{self.client_profile.user.username} - {self.libelle.nom}: {self.valeur}"
@@ -185,8 +261,23 @@ class AbonnementPaiement(models.Model):
 # PARTIE 4 : MODÈLES & COMMANDES
 # ============================================================
 class TypeVetement(models.Model):
-    nom = models.CharField(max_length=100, unique=True)
-    
+    nom = models.CharField(max_length=100)
+    # null = type proposé par l'application ; sinon type créé par un couturier
+    professional_profile = models.ForeignKey(
+        'ProfessionalProfile',
+        on_delete=models.CASCADE,
+        related_name='types_perso',
+        null=True,
+        blank=True,
+    )
+    # Mesures demandées par défaut pour ce type de vêtement
+    mesures_requises = models.ManyToManyField(
+        'LibelleMesure', blank=True, related_name='types_vetement'
+    )
+
+    class Meta:
+        unique_together = ('professional_profile', 'nom')
+
     def __str__(self): 
         return self.nom
 
@@ -202,6 +293,18 @@ class ModeleDisponible(models.Model):
     # Montant de l'acompte demandé au client à la commande, DÉCIDÉ PAR LE
     # COUTURIER lui-même (plus de calcul automatique à 50%).
     acompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Mesures choisies par le couturier pour CE modèle.
+    # Si vide, on utilise celles du type de vêtement.
+    mesures_requises = models.ManyToManyField(
+        'LibelleMesure', blank=True, related_name='modeles'
+    )
+
+    def mesures_a_prendre(self):
+        """Mesures à demander au client pour ce modèle (modèle > type)."""
+        propres = self.mesures_requises.all()
+        if propres.exists():
+            return propres.order_by('ordre', 'id')
+        return self.type_vetement.mesures_requises.all().order_by('ordre', 'id')
 
     def __str__(self): 
         return f"{self.nom} - {self.professional_profile.nom_entreprise}"
@@ -303,6 +406,14 @@ class ModeleCommande(models.Model):
         blank=True
     )
     prix_unitaire_snapshot = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Pour qui est ce vêtement (copie du prénom pour l'historique)
+    personne = models.ForeignKey('PersonneMesuree', on_delete=models.SET_NULL, null=True, blank=True,
+                                 related_name='articles')
+    personne_nom = models.CharField(max_length=60, blank=True, default='')
+    # Type de vêtement choisi par le client pour son propre modèle (sur-mesure)
+    type_vetement = models.ForeignKey('TypeVetement', on_delete=models.SET_NULL, null=True, blank=True,
+                                      related_name='articles_sur_mesure')
+
     def __str__(self): 
         return f"Article #{self.id} de Commande #{self.commande.id}"
     

@@ -231,6 +231,8 @@ class Command(BaseCommand):
 
     # ── Mesures du client ─────────────────────────────────────
     def _ensure_mesures_client(self, client):
+        from core.models import PersonneMesuree
+        moi = PersonneMesuree.moi(client)
         if MesureClient.objects.filter(client_profile=client).exists():
             return
         libelles = LibelleMesure.objects.filter(client_profile=None)
@@ -238,6 +240,7 @@ class Command(BaseCommand):
         MesureClient.objects.bulk_create([
             MesureClient(
                 client_profile=client,
+                personne=moi,
                 libelle=lib,
                 valeur=Decimal(random.randint(
                     *bornes.get(lib.nom, (60, 120))

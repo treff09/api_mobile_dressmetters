@@ -58,8 +58,48 @@ class MesureClientViewSet(viewsets.ModelViewSet):
 # ============================================================
 
 class TypeVetementViewSet(viewsets.ModelViewSet):
+    """
+    Types de vêtements : ceux de l'application + ceux créés par le couturier connecté.
+    Un couturier peut créer ses propres types (POST) et choisir leurs mesures.
+    """
     queryset = TypeVetement.objects.all()
     serializer_class = TypeVetementSerializer
+
+    def get_queryset(self):
+        from django.db.models import Q
+        user = self.request.user
+        qs = TypeVetement.objects.filter(professional_profile__isnull=True)
+        if user.is_authenticated and hasattr(user, 'professional_profile'):
+            qs = TypeVetement.objects.filter(
+                Q(professional_profile__isnull=True) | Q(professional_profile=user.professional_profile)
+            )
+        return qs.order_by('nom')
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import PermissionDenied, ValidationError
+        user = self.request.user
+        if not (user.is_authenticated and hasattr(user, 'professional_profile')):
+            raise PermissionDenied("Seul un couturier peut créer un type de vêtement.")
+        pro = user.professional_profile
+        nom = serializer.validated_data.get('nom', '').strip()
+        if TypeVetement.objects.filter(nom__iexact=nom, professional_profile__isnull=True).exists() or \
+           TypeVetement.objects.filter(nom__iexact=nom, professional_profile=pro).exists():
+            raise ValidationError({"error": f"Le type « {nom} » existe déjà."})
+        serializer.save(professional_profile=pro, nom=nom)
+
+    def perform_update(self, serializer):
+        from rest_framework.exceptions import PermissionDenied
+        pro = getattr(self.request.user, 'professional_profile', None)
+        if serializer.instance.professional_profile_id is None or serializer.instance.professional_profile != pro:
+            raise PermissionDenied("Vous ne pouvez modifier que vos propres types.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import PermissionDenied
+        pro = getattr(self.request.user, 'professional_profile', None)
+        if instance.professional_profile_id is None or instance.professional_profile != pro:
+            raise PermissionDenied("Vous ne pouvez supprimer que vos propres types.")
+        instance.delete()
 
 class AbonnementViewSet(viewsets.ModelViewSet):
     queryset = Abonnement.objects.all()

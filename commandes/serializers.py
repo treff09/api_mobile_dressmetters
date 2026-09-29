@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from core.models import (
     Commande, LibelleMesure, MesureClient, ModeleCommande, ModeleDisponible, 
-    ProfessionalProfile, ClientProfile, ValeurMesureCommande
+    ProfessionalProfile, ClientProfile, ValeurMesureCommande, TypeVetement
 )
 
 # ============================================================
@@ -77,6 +77,8 @@ class ModeleCommandeDetailSerializer(serializers.ModelSerializer):
     # URL absolue de la photo du tissu (commandes/tissu/)
     image_tissu = serializers.SerializerMethodField()
     mesures_figees = ValeurMesureCommandeSerializer(many=True, read_only=True)
+    # Pour qui (vide = le client lui-même) et type choisi pour un sur-mesure
+    type_vetement_nom = serializers.SerializerMethodField()
     # Le context (request) est passé au sous-serializer via get_modele_disponible
     modele_disponible = serializers.SerializerMethodField()
 
@@ -88,8 +90,17 @@ class ModeleCommandeDetailSerializer(serializers.ModelSerializer):
             'image_personnalisee',   # modèle custom → commandes/custom/
             'image_tissu',           # photo tissu   → commandes/tissu/
             'mesures_figees',
-            'prix_unitaire_snapshot'
+            'prix_unitaire_snapshot',
+            'personne_nom',          # "" = pour le client lui-même, sinon "Junior"…
+            'type_vetement_nom',     # sur-mesure : "Robe", "Jupe"…
         ]
+
+    def get_type_vetement_nom(self, obj):
+        if obj.type_vetement_id:
+            return obj.type_vetement.nom
+        if obj.modele_disponible_id:
+            return obj.modele_disponible.type_vetement.nom
+        return None
 
     def get_image_personnalisee(self, obj):
         if obj.image_personnalisee:
@@ -149,10 +160,14 @@ class ModeleCommandeSerializer(serializers.ModelSerializer):
     )
     # ✅ NOUVEAU : mesures spécifiques à cet article
     mesures = ValeurMesureCommandeInputSerializer(many=True, required=False)
+    # Sur-mesure : type de vêtement choisi par le client (robe, jupe, boubou…)
+    type_vetement = serializers.PrimaryKeyRelatedField(
+        queryset=TypeVetement.objects.all(), allow_null=True, required=False
+    )
 
     class Meta:
         model = ModeleCommande
-        fields = ['modele_disponible', 'image_personnalisee', 'mesures']
+        fields = ['modele_disponible', 'image_personnalisee', 'image_tissu', 'type_vetement', 'mesures']
 
 
 from django.db import transaction

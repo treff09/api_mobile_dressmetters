@@ -100,7 +100,8 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [('127.0.0.1', 6379)], # Adresse locale de Redis
+            # En Docker, mettre REDIS_HOST=redis (nom du service) dans le .env
+            "hosts": [(os.getenv('REDIS_HOST', '127.0.0.1'), int(os.getenv('REDIS_PORT', 6379)))],
         },
     },
 }
@@ -153,9 +154,12 @@ EMAIL_PORT = int(os.getenv('EMAIL_PORT', 465))
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 
-# Configuration SSL pour port 465
-EMAIL_USE_SSL = True
-EMAIL_USE_TLS = False
+# Port 465 -> SSL ; port 587 -> TLS (STARTTLS). Avant, SSL était FORCÉ quel que
+# soit le port : avec un serveur en 587, l'envoi échouait à chaque fois.
+EMAIL_USE_SSL = os.getenv('EMAIL_USE_SSL', 'true' if EMAIL_PORT == 465 else 'false').lower() == 'true'
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'true' if EMAIL_PORT == 587 else 'false').lower() == 'true'
+# Sans délai maximum, un serveur mail qui ne répond pas bloque l'inscription
+EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', 20))
 from email.utils import formataddr
 # Contexte SSL pour éviter les erreurs de certificat (Hostname mismatch)
 EMAIL_SSL_CONTEXT = ssl._create_unverified_context()
@@ -167,5 +171,18 @@ else:
     DEFAULT_FROM_EMAIL = "COUTURIER DIGITAL <noreply@couturier-digital.com>"
     
 REPLY_TO = [DEFAULT_FROM_EMAIL]
+
+# --- CACHE (codes OTP) ---
+# Le code OTP est gardé en cache 15 min entre l'envoi du mail et sa saisie.
+# Le cache par défaut est « en mémoire » et propre à chaque processus : avec
+# plusieurs processus/conteneurs, le code saisi n'était pas retrouvé
+# (« Code OTP incorrect ou expiré »). Si REDIS_HOST est défini, on partage via Redis.
+if os.getenv('REDIS_HOST'):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': f"redis://{os.getenv('REDIS_HOST')}:{os.getenv('REDIS_PORT', 6379)}/1",
+        }
+    }
 PAYMENT_GATEWAY_BASE_URL = os.environ.get("PAYMENT_GATEWAY_BASE_URL", "http://localhost:8000/api/payments")
 PAYMENT_GATEWAY_API_KEY = os.environ.get("PAYMENT_GATEWAY_API_KEY", "")

@@ -71,10 +71,18 @@ class CommandeCreateView(APIView):
             if modele_id in ["0", "", "null", None]:
                 modele_id = None
                 
-            articles.append({
+            type_id = data.get(f'articles[{i}]type_vetement')
+            if type_id in ["0", "", "null", None]:
+                type_id = None
+            article = {
                 'modele_disponible': modele_id,
                 'image_personnalisee': data.get(f'articles[{i}]image_personnalisee'),
-            })
+                'type_vetement': type_id,
+            }
+            # Photo du tissu envoyée directement avec la commande (facultative)
+            if data.get(f'articles[{i}]image_tissu'):
+                article['image_tissu'] = data.get(f'articles[{i}]image_tissu')
+            articles.append(article)
             i += 1
         
         if articles:
@@ -92,6 +100,16 @@ class CommandeCreateView(APIView):
             
             client_profile = client_user.client_profile
 
+            # Pour qui est la commande (Moi, Junior…). Sans précision : « Moi ».
+            from core.models import PersonneMesuree
+            personne_id = request.data.get('personne')
+            if personne_id in (None, '', '0', 'null'):
+                personne = PersonneMesuree.moi(client_profile)
+            else:
+                personne = client_profile.personnes.filter(pk=personne_id).first()
+                if personne is None:
+                    return Response({"error": "Personne introuvable."}, status=400)
+
             # 2. Calcul financier (informatif uniquement : le règlement se fait
             # désormais hors-app, via Mobile Money ou Espèce, choisi juste après)
             prix_total = Decimal('0.00')
@@ -108,9 +126,34 @@ class CommandeCreateView(APIView):
                 # communique directement au client (devis).
 
             # 3. Vérification Mesures
-            mesures_profil = MesureClient.objects.filter(client_profile=client_profile)
+            mesures_profil = MesureClient.objects.filter(
+                client_profile=client_profile, personne=personne).select_related('libelle')
             if not mesures_profil.exists():
-                return Response({"error": "Veuillez remplir vos mensurations avant de commander."}, status=400)
+                return Response({"error": "Il faut d'abord prendre tes mesures." if personne.est_moi else f"Il faut d'abord prendre les mesures de {personne.prenom}.",
+                                 "mesures_manquantes": []}, status=400)
+
+            def mesures_requises(art):
+                """Mesures à demander : celles du modèle, sinon celles du type choisi (sur-mesure)."""
+                m = art.get('modele_disponible')
+                if m:
+                    return list(m.mesures_a_prendre())
+                tv = art.get('type_vetement')
+                if tv:
+                    return list(tv.mesures_requises.all())
+                return []
+
+            # Mesures demandées par chaque modèle (mode guidé) : toutes doivent être connues
+            valeurs_connues = {m.libelle_id for m in mesures_profil if m.valeur and m.valeur > 0}
+            manquantes = []
+            for art in articles_data:
+                for lib in mesures_requises(art):
+                    if lib.id not in valeurs_connues and lib.nom not in manquantes:
+                        manquantes.append(lib.nom)
+            if manquantes:
+                return Response({
+                    "error": "Il manque des mesures pour ce modèle.",
+                    "mesures_manquantes": manquantes,
+                }, status=400)
 
             try:
                 with transaction.atomic():
@@ -139,6 +182,10 @@ class CommandeCreateView(APIView):
                             commande=commande,
                             modele_disponible=modele_dispo,
                             image_personnalisee=art_data.get('image_personnalisee'),
+                            image_tissu=art_data.get('image_tissu'),
+                            type_vetement=art_data.get('type_vetement'),
+                            personne=personne,
+                            personne_nom='' if personne.est_moi else personne.prenom,
                             prix_unitaire_snapshot=modele_dispo.price if modele_dispo else Decimal('0.00')
                         )
 
@@ -154,14 +201,19 @@ class CommandeCreateView(APIView):
                             ])
                         else:
                             # Cas 2 : on capture (fige) une COPIE des mesures du profil à cet instant
-                            # Ces données ne changeront JAMAIS même si le client modifie son profil après
+                            # Ces données ne changeront JAMAIS même si le client modifie son profil après.
+                            # Si le modèle définit ses mesures, on ne fige QUE celles-là.
+                            a_figer = mesures_profil
+                            ids_requis = {lib.id for lib in mesures_requises(art_data)}
+                            if ids_requis:
+                                a_figer = [m for m in mesures_profil if m.libelle_id in ids_requis]
                             ValeurMesureCommande.objects.bulk_create([
                                 ValeurMesureCommande(
                                     article_commande=modele_commande,
                                     libelle_nom=m.libelle.nom,  # copie du nom (string), pas une FK
                                     valeur=m.valeur             # copie de la valeur (decimal), pas une FK
                                 )
-                                for m in mesures_profil  # mesures_profil est déjà chargé plus haut
+                                for m in a_figer
                             ])
 
                     # 6. ENVOI DES NOTIFICATIONS (Après le succès de la transaction)

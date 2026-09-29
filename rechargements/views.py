@@ -82,5 +82,9 @@ class SubscriptionStatusView(APIView):
             data["abonnement_actif"] = abonnement.est_actif if abonnement else False
             data["date_fin_abonnement"] = abonnement.date_fin if abonnement else None
             data["jours_restants"] = abonnement.jours_restants if abonnement else None
+            # Limite de modèles sans abonnement (réglable dans l'admin)
+            from core.models import AppConfiguration, ModeleDisponible
+            data["limite_modeles_gratuits"] = AppConfiguration.limite_modeles_gratuits()
+            data["nb_modeles"] = ModeleDisponible.objects.filter(professional_profile=pro).count()
 
         return Response(data, status=status.HTTP_200_OK)

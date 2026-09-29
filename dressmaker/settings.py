@@ -12,13 +12,23 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # 🔥 CHARGEMENT EXPLICITE DU .ENV (À la racine du projet)
+# Le fichier .env peut être à côté de manage.py OU un dossier au-dessus
 load_dotenv(os.path.join(BASE_DIR, '.env'))
+load_dotenv(os.path.join(BASE_DIR.parent, '.env'))
 
 SECRET_KEY = 'django-insecure-piqny!!-0u6kcfjy&zaq-f@r9*+g5bpbu#2^3(r&4gq$0vd5jy'
 
 DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.2.2']
+# Domaines en production, ex. dans le .env : ALLOWED_HOSTS=dressmetter.stephaneboundaone.tech
+ALLOWED_HOSTS += [h.strip() for h in os.getenv('ALLOWED_HOSTS', '').split(',') if h.strip()]
+
+# Derrière Nginx en HTTPS : Django doit savoir que la requête d'origine était en https,
+# sinon les liens des images sont générés en http:// et le navigateur (Flutter Web)
+# les bloque sur une page https (« contenu mixte »).
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
 
 # Application definition
 

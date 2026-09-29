@@ -465,6 +465,16 @@ class AppConfiguration(models.Model):
     global_title = models.CharField(max_length=150, blank=True)
     global_message = models.TextField(blank=True)
     send_to_all_now = models.BooleanField(default=False, verbose_name="🚀 ENVOYER EN TEMPS RÉEL")
+    nb_modeles_gratuits = models.PositiveIntegerField(
+        default=5,
+        verbose_name="Modèles gratuits par couturier",
+        help_text="Nombre de modèles qu'un couturier peut publier SANS abonnement Premium.",
+    )
+
+    @classmethod
+    def limite_modeles_gratuits(cls):
+        config = cls.objects.first()
+        return config.nb_modeles_gratuits if config else 5
 
     def save(self, *args, **kwargs):
         if self.send_to_all_now and self.global_message:

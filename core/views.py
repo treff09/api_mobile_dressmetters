@@ -154,9 +154,10 @@ class ModeleCreateAPIView(generics.CreateAPIView):
             date_fin__gt=now
         ).exists()
 
-        if not abonnement_actif and nb_modeles >= 5:
+        limite = AppConfiguration.limite_modeles_gratuits()  # réglable dans l'admin
+        if not abonnement_actif and nb_modeles >= limite:
             raise PermissionDenied(
-                "Limite atteinte : sans abonnement, vous ne pouvez créer que 5 modèles maximum."
+                f"Limite atteinte : sans abonnement, vous ne pouvez créer que {limite} modèles maximum."
             )
 
         serializer.save(professional_profile=pro_profile)
@@ -227,11 +228,12 @@ class UserProfileTypeView(APIView):
 def check_app_status(request):
     config = AppConfiguration.objects.first()
     if not config:
-        return Response({"is_maintenance": False})
+        return Response({"is_maintenance": False, "nb_modeles_gratuits": 5})
     
     return Response({
         "is_maintenance": config.is_maintenance_mode,
-        "message": config.maintenance_message
+        "message": config.maintenance_message,
+        "nb_modeles_gratuits": config.nb_modeles_gratuits,
     })
 
 

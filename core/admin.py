@@ -27,8 +27,13 @@ from .models import AppConfiguration
 @admin.register(AppConfiguration)
 class AppConfigurationAdmin(admin.ModelAdmin):
     # Correction ici : on utilise 'global_title' au lieu de 'global_notification_title'
-    list_display = ('id', 'is_maintenance_mode', 'global_title', 'send_to_all_now')
-    list_editable = ('is_maintenance_mode', 'send_to_all_now') # Optionnel : permet de cocher directement dans la liste
+    list_display = ('id', 'is_maintenance_mode', 'nb_modeles_gratuits', 'global_title', 'send_to_all_now')
+    list_editable = ('is_maintenance_mode', 'nb_modeles_gratuits', 'send_to_all_now')  # modifiable directement dans la liste
+    fieldsets = (
+        ("Couturiers sans abonnement", {"fields": ("nb_modeles_gratuits",)}),
+        ("Maintenance", {"fields": ("is_maintenance_mode", "maintenance_message")}),
+        ("Message à tous les utilisateurs", {"fields": ("global_title", "global_message", "send_to_all_now")}),
+    )
 
     # Empêche la création de plusieurs lignes (Singleton)
     def has_add_permission(self, request):

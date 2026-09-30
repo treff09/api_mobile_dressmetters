@@ -78,6 +78,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', # Placé en haut pour CORS
     'django.middleware.security.SecurityMiddleware',
+    # Sert le CSS/JS de l'admin (et tous les fichiers statiques) en production
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -150,7 +152,14 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+
+# Fichiers statiques compressés servis par WhiteNoise.
+# Après chaque déploiement : python manage.py collectstatic --noinput
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
+}
 MEDIA_URL = '/media/' 
 MEDIA_ROOT = BASE_DIR / 'media' 
 

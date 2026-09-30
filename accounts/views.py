@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.utils import timezone
 from django.contrib.auth.models import User
 
 # Importations depuis CORE
@@ -168,38 +169,131 @@ class ProfessionalRegistrationView(APIView):
 # AUTHENTIFICATION & SESSION
 # ============================================================
 
+def _reponse_connexion(user):
+    """Réponse de connexion (tokens + infos) : utilisée par la connexion et la réactivation."""
+    refresh = RefreshToken.for_user(user)
+    profile_type = 'professionnel' if hasattr(user, 'professional_profile') else 'client'
+    return Response({
+        'status': status.HTTP_200_OK,
+        'data': {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user_info': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'profile_type': profile_type,
+            }
+        }
+    }, status=status.HTTP_200_OK)
+
+
+def _compte_en_pause(email, password):
+    """
+    Si l'e-mail et le mot de passe sont bons mais que le compte a été désactivé
+    ou supprimé (et reste récupérable), renvoie (user, depart). Sinon (None, None).
+    """
+    from core.models import DepartCompte
+    user = User.objects.filter(email__iexact=(email or '').strip()).first()
+    if not user or user.is_active or not user.check_password(password or ''):
+        return None, None
+    depart = DepartCompte.en_cours_pour(user)
+    if not depart:
+        return None, None
+    if depart.action == DepartCompte.SUPPRESSION and depart.date_limite and timezone.now() > depart.date_limite:
+        return None, None  # délai de récupération dépassé : plus récupérable
+    return user, depart
+
+
 class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        # Compte désactivé ou supprimé (récupérable) : on propose de le récupérer
+        user, depart = _compte_en_pause(request.data.get('email'), request.data.get('password'))
+        if user:
+            supprime = depart.action == depart.SUPPRESSION
+            return Response({
+                'code': 'COMPTE_SUPPRIME' if supprime else 'COMPTE_DESACTIVE',
+                'date': depart.date_demande.strftime('%d/%m/%Y'),
+                'date_limite': depart.date_limite.strftime('%d/%m/%Y') if supprime else None,
+                'message': (f"Ce compte a été supprimé le {depart.date_demande:%d/%m/%Y}. "
+                            f"Tu peux encore le récupérer jusqu'au {depart.date_limite:%d/%m/%Y}.")
+                           if supprime else
+                           f"Ton compte est en pause depuis le {depart.date_demande:%d/%m/%Y}.",
+            }, status=status.HTTP_403_FORBIDDEN)
+
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            user = serializer.validated_data['user']
-
-            # 1. Générer les tokens JWT
-            refresh = RefreshToken.for_user(user)
-            access = refresh.access_token
-
-            # 2. Déterminer le type de profil
-            profile_type = 'client'
-            if hasattr(user, 'professional_profile'):
-                profile_type = 'professionnel'
-
-            return Response({
-                'status': status.HTTP_200_OK,
-                'data': {
-                    'refresh': str(refresh),
-                    'access': str(access),
-                    'user_info': {
-                        'id': user.id,
-                        'username': user.username,
-                        'email': user.email,
-                        'profile_type': profile_type,
-                    }
-                }
-            }, status=status.HTTP_200_OK)
+            return _reponse_connexion(serializer.validated_data['user'])
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class MotifsDepartView(APIView):
+    """GET /api/v1/accounts/motifs-depart/ : motifs proposés + délai de récupération (réglés dans l'admin)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from core.models import MotifDepart, AppConfiguration
+        return Response({
+            'delai_recuperation_jours': AppConfiguration.delai_recuperation(),
+            'motifs': [
+                {'id': m.id, 'libelle': m.libelle, 'demande_precision': m.demande_precision}
+                for m in MotifDepart.objects.filter(actif=True)
+            ],
+        })
+
+
+class DepartCompteView(APIView):
+    """
+    POST /api/v1/accounts/depart/
+    {"action": "DESACTIVATION" | "SUPPRESSION", "motif_id": 3, "precision": "..."}
+    Dans les deux cas le compte est désactivé (réversible) et toutes les sessions sont fermées.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from core.models import DepartCompte, MotifDepart
+        action = request.data.get('action')
+        if action not in (DepartCompte.DESACTIVATION, DepartCompte.SUPPRESSION):
+            return Response({'error': 'Action inconnue.'}, status=status.HTTP_400_BAD_REQUEST)
+        motif = MotifDepart.objects.filter(id=request.data.get('motif_id'), actif=True).first()
+        if not motif:
+            return Response({'error': 'Choisis un motif.'}, status=status.HTTP_400_BAD_REQUEST)
+        precision = (request.data.get('precision') or '').strip()
+        if motif.demande_precision and not precision:
+            return Response({'error': 'Écris ton motif.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user = request.user
+        depart = DepartCompte.objects.create(user=user, action=action, motif=motif, precision=precision[:1000])
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        # Ferme toutes les sessions ouvertes (sur tous les téléphones)
+        for token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=token)
+
+        if action == DepartCompte.SUPPRESSION:
+            msg = (f"Ton compte est supprimé. Tu peux encore le récupérer jusqu'au "
+                   f"{depart.date_limite:%d/%m/%Y} en te reconnectant.")
+        else:
+            msg = "Ton compte est en pause. Reconnecte-toi quand tu veux pour le réactiver."
+        return Response({'message': msg}, status=status.HTTP_200_OK)
+
+
+class ReactiverCompteView(APIView):
+    """POST /api/v1/accounts/reactiver/ {"email", "password"} : récupère le compte et connecte."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        user, depart = _compte_en_pause(request.data.get('email'), request.data.get('password'))
+        if not user:
+            return Response({'error': "Impossible de récupérer ce compte."}, status=status.HTTP_400_BAD_REQUEST)
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+        depart.date_reactivation = timezone.now()
+        depart.save(update_fields=['date_reactivation'])
+        return _reponse_connexion(user)
 
 
 from rest_framework.views import APIView
@@ -341,7 +435,9 @@ class ForgotPasswordView(APIView):
         # --- ÉTAPE 1 : ENVOI DE L'EMAIL ---
         if step == 'send_email':
             try:
-                user = User.objects.get(email=email)
+                user = User.objects.filter(email__iexact=email.strip(), is_active=True).first()
+                if not user:
+                    raise User.DoesNotExist
                 otp = str(random.randint(1000, 9999)) # 4 chiffres comme dans ton Flutter
                 
                 # Stockage en cache (validité 10 min)
@@ -373,7 +469,9 @@ class ForgotPasswordView(APIView):
                 return Response({"message": "Action non autorisée. Veuillez vérifier l'OTP d'abord."}, status=status.HTTP_403_FORBIDDEN)
 
             try:
-                user = User.objects.get(email=email)
+                user = User.objects.filter(email__iexact=email.strip()).first()
+                if not user:
+                    raise User.DoesNotExist
                 user.set_password(new_password)
                 user.save()
                 

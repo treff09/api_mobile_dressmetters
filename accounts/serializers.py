@@ -12,7 +12,24 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["username", "email", "password"]
-        extra_kwargs = {"password": {"write_only": True}}
+        extra_kwargs = {"password": {"write_only": True}, "email": {"required": True, "allow_blank": False}}
+
+    def validate_email(self, value):
+        """
+        UN SEUL compte par adresse e-mail (sans tenir compte des majuscules).
+        Un compte en pause ou supprimé mais encore récupérable garde son e-mail ;
+        seul un compte effacé définitivement libère l'adresse.
+        """
+        email = (value or '').strip().lower()
+        existant = User.objects.filter(email__iexact=email).first()
+        if existant:
+            if not existant.is_active:
+                raise serializers.ValidationError(
+                    "Un compte existe déjà avec cet e-mail. Il est en pause ou supprimé : "
+                    "connecte-toi avec cet e-mail pour le récupérer.")
+            raise serializers.ValidationError(
+                "Un compte existe déjà avec cet e-mail. Connecte-toi, ou utilise « Mot de passe oublié ».")
+        return email
 
     def create(self, validated_data):
         return User.objects.create_user(**validated_data)
@@ -72,11 +89,10 @@ class LoginSerializer(serializers.Serializer):
         email = data.get('email')
         password = data.get('password')
 
-        try:
-            user_obj = User.objects.get(email=email)
-            username = user_obj.username
-        except User.DoesNotExist:
+        user_obj = User.objects.filter(email__iexact=(email or '').strip()).first()
+        if not user_obj:
             raise serializers.ValidationError("Adresse e-mail ou mot de passe incorrect.")
+        username = user_obj.username
 
         user = authenticate(username=username, password=password)
         if not user:

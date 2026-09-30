@@ -119,12 +119,14 @@ class ModeleListAPIView(APIView):
                 date_fin__gt=now
             ).exists()
 
+            # ?retires=1 -> modèles retirés du catalogue (pour les remettre en ligne)
+            retires = request.query_params.get('retires') in ('1', 'true')
             queryset = ModeleDisponible.objects.filter(
-                professional_profile=pro_profile
+                professional_profile=pro_profile, actif=not retires
             ).order_by('-id')
 
-            if not abonnement_actif:
-                queryset = queryset[:5]
+            if not abonnement_actif and not retires:
+                queryset = queryset[:AppConfiguration.limite_modeles_gratuits()]
 
             serializer = ModeleDisponibleSerializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -145,7 +147,7 @@ class ModeleCreateAPIView(generics.CreateAPIView):
         pro_profile = user.professional_profile
         now = timezone.now()
 
-        nb_modeles = ModeleDisponible.objects.filter(
+        nb_modeles = ModeleDisponible.objects.filter(actif=True).filter(
             professional_profile=pro_profile
         ).count()
 
@@ -178,6 +180,11 @@ class ModeleUpdateAPIView(generics.UpdateAPIView):
         serializer.save(professional_profile=self.request.user.professional_profile)
 
 class ModeleDestroyAPIView(generics.DestroyAPIView):
+    """
+    « Supprimer » un modèle = le RETIRER du catalogue (rien n'est effacé) :
+    les clients ne le voient plus, mais les commandes déjà passées gardent
+    sa photo, son nom et son prix.
+    """
     queryset = ModeleDisponible.objects.all()
     permission_classes = [IsAuthenticated, IsProfessionalOrReadOnly]
     lookup_field = 'id'
@@ -186,6 +193,45 @@ class ModeleDestroyAPIView(generics.DestroyAPIView):
         if hasattr(self.request.user, 'professional_profile'):
             return ModeleDisponible.objects.filter(professional_profile=self.request.user.professional_profile)
         return ModeleDisponible.objects.none()
+
+    def perform_destroy(self, instance):
+        if not instance.actif:
+            return  # déjà retiré
+        pro = instance.professional_profile
+        abonnement_actif = Abonnement.objects.filter(professional_profile=pro, date_fin__gt=timezone.now()).exists()
+        limite = AppConfiguration.limite_retraits_gratuits()  # réglable dans l'admin
+        if not abonnement_actif and pro.nb_retraits >= limite:
+            raise PermissionDenied(
+                f"Sans abonnement, tu peux retirer {limite} modèle{'s' if limite > 1 else ''} au total. "
+                f"Abonne-toi pour en retirer plus."
+            )
+        instance.actif = False
+        instance.date_retrait = timezone.now()
+        instance.save(update_fields=['actif', 'date_retrait'])
+        # Chaque retrait compte, même si le modèle est remis en ligne ensuite
+        pro.nb_retraits += 1
+        pro.save(update_fields=['nb_retraits'])
+
+
+class ModeleRemettreAPIView(APIView):
+    """POST /api/v1/core/modeles/<id>/remettre/ : remet un modèle retiré dans le catalogue."""
+    permission_classes = [IsAuthenticated, IsProfessionalOrReadOnly]
+
+    def post(self, request, id):
+        pro = getattr(request.user, 'professional_profile', None)
+        modele = ModeleDisponible.objects.filter(id=id, professional_profile=pro).first() if pro else None
+        if not modele:
+            return Response({"detail": "Modèle introuvable."}, status=status.HTTP_404_NOT_FOUND)
+        abonnement_actif = Abonnement.objects.filter(professional_profile=pro, date_fin__gt=timezone.now()).exists()
+        limite = AppConfiguration.limite_modeles_gratuits()
+        en_ligne = ModeleDisponible.objects.filter(professional_profile=pro, actif=True).count()
+        if not abonnement_actif and en_ligne >= limite:
+            return Response({"detail": f"Sans abonnement, tu peux avoir {limite} modèles en ligne. Retire-en un d'abord."},
+                            status=status.HTTP_403_FORBIDDEN)
+        modele.actif = True
+        modele.date_retrait = None
+        modele.save(update_fields=['actif', 'date_retrait'])
+        return Response({"message": "Modèle remis en ligne."})
 
 # ============================================================
 # PARTIE : COMMANDES
@@ -243,10 +289,10 @@ from .models import PrivacyPolicy
 
 def privacy_policy_view(request):
     # On récupère la dernière version enregistrée
-    policy = PrivacyPolicy.objects.order_by('-derniere_mise_a_jour').last()
+    policy = PrivacyPolicy.objects.order_by('-derniere_mise_a_jour').first()  # la plus récente
     return render(request, 'privacy.html', {'policy': policy})
 
 def cgu_view(request):
-    cgu = ConditionGenerale.objects.last()
+    cgu = ConditionGenerale.objects.order_by('-derniere_mise_a_jour').first()  # la plus récente
     return render(request, 'cgu.html', {'cgu': cgu})
 

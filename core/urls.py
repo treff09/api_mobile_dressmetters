@@ -17,6 +17,7 @@ from .views import (
     ModeleDetailAPIView, 
     ModeleUpdateAPIView, 
     ModeleDestroyAPIView,
+    ModeleRemettreAPIView,
     TypeVetementListAPIView,
     OffreAbonnementListView,
     cgu_view,
@@ -42,6 +43,7 @@ urlpatterns = [
     path('modeles/<int:id>/', ModeleDetailAPIView.as_view(), name='modele-detail'),
     path('modeles/<int:id>/update/', ModeleUpdateAPIView.as_view(), name='modele-update'),
     path('modeles/<int:id>/delete/', ModeleDestroyAPIView.as_view(), name='modele-delete'),
+    path('modeles/<int:id>/remettre/', ModeleRemettreAPIView.as_view(), name='modele-remettre'),
 
     # --- Autres Endpoints ---
     path('type-vetements-list/', TypeVetementListAPIView.as_view(), name='type-vetement-list'),

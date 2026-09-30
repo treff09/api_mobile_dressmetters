@@ -85,6 +85,8 @@ class SubscriptionStatusView(APIView):
             # Limite de modèles sans abonnement (réglable dans l'admin)
             from core.models import AppConfiguration, ModeleDisponible
             data["limite_modeles_gratuits"] = AppConfiguration.limite_modeles_gratuits()
-            data["nb_modeles"] = ModeleDisponible.objects.filter(professional_profile=pro).count()
+            data["nb_modeles"] = ModeleDisponible.objects.filter(professional_profile=pro, actif=True).count()
+            data["limite_retraits_gratuits"] = AppConfiguration.limite_retraits_gratuits()
+            data["nb_retraits"] = pro.nb_retraits
 
         return Response(data, status=status.HTTP_200_OK)

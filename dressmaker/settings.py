@@ -182,6 +182,21 @@ else:
     
 REPLY_TO = [DEFAULT_FROM_EMAIL]
 
+# --- CELERY (tâches planifiées) ---
+from celery.schedules import crontab
+
+_REDIS = f"redis://{os.getenv('REDIS_HOST', '127.0.0.1')}:{os.getenv('REDIS_PORT', 6379)}"
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', f"{_REDIS}/2")
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', f"{_REDIS}/3")
+CELERY_TIMEZONE = 'Africa/Abidjan'
+CELERY_BEAT_SCHEDULE = {
+    # Effacement des comptes supprimés dont le délai de récupération est dépassé
+    'effacer-comptes-supprimes': {
+        'task': 'accounts.effacer_comptes_supprimes',
+        'schedule': crontab(hour=int(os.getenv('EFFACEMENT_HEURE', 3)), minute=0),
+    },
+}
+
 # --- CACHE (codes OTP) ---
 # Le code OTP est gardé en cache 15 min entre l'envoi du mail et sa saisie.
 # Le cache par défaut est « en mémoire » et propre à chaque processus : avec

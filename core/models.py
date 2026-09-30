@@ -20,6 +20,15 @@ class ProfessionalProfile(models.Model):
     nom = models.CharField(max_length=100, blank=True)
     prenom = models.CharField(max_length=100, blank=True)
     numero_telephone = models.CharField(max_length=20, blank=True, unique=True)
+    # Nombre de modèles retirés du catalogue (limité sans abonnement)
+    nb_retraits = models.PositiveIntegerField(default=0)
+
+    def save(self, *args, **kwargs):
+        # Un même compte ne peut pas être client ET couturier
+        if not self.pk and ClientProfile.objects.filter(user_id=self.user_id).exists():
+            from django.core.exceptions import ValidationError
+            raise ValidationError("Ce compte est déjà un compte client : il ne peut pas être aussi couturier.")
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"Profil Pro - {self.nom_entreprise}"
@@ -31,6 +40,13 @@ class ClientProfile(models.Model):
     prenom = models.CharField(max_length=100, blank=True)
     numero_telephone = models.CharField(max_length=20, blank=True, null=True)
     genre = models.CharField(max_length=20, blank=True, null=True)
+    def save(self, *args, **kwargs):
+        # Un même compte ne peut pas être client ET couturier
+        if not self.pk and ProfessionalProfile.objects.filter(user_id=self.user_id).exists():
+            from django.core.exceptions import ValidationError
+            raise ValidationError("Ce compte est déjà un compte couturier : il ne peut pas être aussi client.")
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Profil Client - {self.user.username}"
 
@@ -293,6 +309,10 @@ class ModeleDisponible(models.Model):
     # Montant de l'acompte demandé au client à la commande, DÉCIDÉ PAR LE
     # COUTURIER lui-même (plus de calcul automatique à 50%).
     acompte = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    # Retiré du catalogue : invisible pour les clients, mais les commandes
+    # déjà passées gardent sa photo et ses informations.
+    actif = models.BooleanField(default=True, verbose_name="En ligne dans le catalogue")
+    date_retrait = models.DateTimeField(null=True, blank=True)
     # Mesures choisies par le couturier pour CE modèle.
     # Si vide, on utilise celles du type de vêtement.
     mesures_requises = models.ManyToManyField(
@@ -471,10 +491,35 @@ class AppConfiguration(models.Model):
         help_text="Nombre de modèles qu'un couturier peut publier SANS abonnement Premium.",
     )
 
+    nb_retraits_gratuits = models.PositiveIntegerField(
+        default=3,
+        verbose_name="Retraits de modèles gratuits par couturier",
+        help_text="Nombre de modèles qu'un couturier SANS abonnement peut retirer de son catalogue "
+                  "(au total). Avec l'abonnement Premium, c'est illimité.",
+    )
+
     @classmethod
     def limite_modeles_gratuits(cls):
         config = cls.objects.first()
         return config.nb_modeles_gratuits if config else 5
+
+    delai_recuperation_jours = models.PositiveIntegerField(
+        default=30,
+        verbose_name="Délai de récupération d'un compte supprimé (jours)",
+        help_text="Pendant ce délai, un utilisateur qui a supprimé son compte peut le récupérer. "
+                  "Ensuite, ses données personnelles sont effacées automatiquement (tâche Celery). "
+                  "Pensez à garder le même chiffre dans la politique de confidentialité.",
+    )
+
+    @classmethod
+    def delai_recuperation(cls):
+        config = cls.objects.first()
+        return config.delai_recuperation_jours if config else 30
+
+    @classmethod
+    def limite_retraits_gratuits(cls):
+        config = cls.objects.first()
+        return config.nb_retraits_gratuits if config else 3
 
     def save(self, *args, **kwargs):
         if self.send_to_all_now and self.global_message:
@@ -516,3 +561,70 @@ class ConditionGenerale(models.Model):
 
     def __str__(self):
         return f"CGU - {self.derniere_mise_a_jour.strftime('%d/%m/%Y')}"
+
+
+# ============================================================
+# DÉPART D'UN UTILISATEUR : désactivation ou suppression du compte
+# ============================================================
+
+class MotifDepart(models.Model):
+    """Motifs proposés quand un utilisateur désactive ou supprime son compte (gérés dans l'admin)."""
+    libelle = models.CharField(max_length=150)
+    demande_precision = models.BooleanField(
+        default=False, help_text="Affiche un champ pour écrire le motif (à cocher pour « Autre »)")
+    ordre = models.PositiveIntegerField(default=0)
+    actif = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['ordre', 'id']
+        verbose_name = "Motif de départ"
+        verbose_name_plural = "Motifs de départ"
+
+    def __str__(self):
+        return self.libelle
+
+
+class DepartCompte(models.Model):
+    """
+    Historique des désactivations / suppressions.
+    Dans les deux cas le compte est seulement désactivé (user.is_active = False) :
+    - DESACTIVATION : pause, réactivable sans limite de temps ;
+    - SUPPRESSION   : récupérable pendant le délai réglé dans l'admin (30 jours par défaut),
+                      puis les données personnelles sont effacées par la tâche Celery
+                      accounts.tasks.effacer_comptes_supprimes (chaque nuit).
+    """
+    DESACTIVATION = 'DESACTIVATION'
+    SUPPRESSION = 'SUPPRESSION'
+    ACTION_CHOICES = [(DESACTIVATION, 'Désactivation (pause)'), (SUPPRESSION, 'Suppression (récupérable un temps)')]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='departs')
+    action = models.CharField(max_length=15, choices=ACTION_CHOICES)
+    motif = models.ForeignKey(MotifDepart, on_delete=models.SET_NULL, null=True, blank=True)
+    precision = models.TextField(blank=True, default='', verbose_name="Motif écrit par l'utilisateur")
+    date_demande = models.DateTimeField(auto_now_add=True)
+    date_reactivation = models.DateTimeField(null=True, blank=True)
+    date_effacement = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date_demande']
+        verbose_name = "Départ d'un compte"
+        verbose_name_plural = "Départs des comptes"
+
+    @property
+    def en_cours(self):
+        return self.date_reactivation is None and self.date_effacement is None
+
+    @property
+    def date_limite(self):
+        if self.action == self.SUPPRESSION:
+            # Délai réglable dans l'admin (App configuration)
+            return self.date_demande + datetime.timedelta(days=AppConfiguration.delai_recuperation())
+        return None
+
+    @classmethod
+    def en_cours_pour(cls, user):
+        return cls.objects.filter(user=user, date_reactivation__isnull=True, date_effacement__isnull=True).first()
+
+    def __str__(self):
+        return f"{self.user} - {self.get_action_display()} ({self.date_demande:%d/%m/%Y})"
+

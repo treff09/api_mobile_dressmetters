@@ -92,6 +92,15 @@ class CommandeCreateView(APIView):
         
         if serializer.is_valid():
             articles_data = serializer.validated_data.get('articles', [])
+
+            # Couturier parti ou modèle retiré du catalogue : on ne peut plus commander
+            pro_cible = serializer.validated_data.get('professional_profile')
+            if pro_cible and not pro_cible.user.is_active:
+                return Response({"error": "Ce couturier n'est plus disponible."}, status=400)
+            for art in articles_data:
+                m = art.get('modele_disponible')
+                if m and not m.actif:
+                    return Response({"error": f"Le modèle « {m.nom} » n'est plus proposé par le couturier."}, status=400)
             client_user = request.user
             
             # Vérifications de sécurité

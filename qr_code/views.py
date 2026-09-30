@@ -59,8 +59,12 @@ class QRAccessView(APIView):
         # 2. Récupère les informations du professionnel
         professional_profile = qr_token.professional_profile
         
-        # 3. Récupère les modèles disponibles du couturier
-        modeles = ModeleDisponible.objects.filter(professional_profile=professional_profile)
+        # Couturier qui a désactivé ou supprimé son compte : plus visible
+        if not professional_profile.user.is_active:
+            return Response({"detail": "Ce couturier n'est plus disponible."}, status=status.HTTP_404_NOT_FOUND)
+
+        # 3. Récupère les modèles EN LIGNE du couturier (pas ceux retirés)
+        modeles = ModeleDisponible.objects.filter(professional_profile=professional_profile, actif=True)
         modeles_serializer = ModeleDisponibleSerializer(modeles, many=True)
         
         # 4. Récupère les mesures DYNAMIQUES du client (s'il est connecté)

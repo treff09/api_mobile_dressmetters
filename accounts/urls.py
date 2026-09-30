@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from core.views import UserProfileTypeView
 from commandes.views import web_login_view, web_recharge_view
 from .views import (
+    MotifsDepartView, DepartCompteView, ReactiverCompteView,
     ChangePasswordView,
     ClientRegistrationView,
     LogoutView,
@@ -21,6 +22,9 @@ urlpatterns = [
     
     # Connexion et Token
     path('login/', LoginView.as_view(), name='login'),
+    path('motifs-depart/', MotifsDepartView.as_view(), name='motifs-depart'),
+    path('depart/', DepartCompteView.as_view(), name='depart-compte'),
+    path('reactiver/', ReactiverCompteView.as_view(), name='reactiver-compte'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', LogoutView.as_view(), name='logout'),
     

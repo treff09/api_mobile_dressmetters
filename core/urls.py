@@ -22,7 +22,8 @@ from .views import (
     OffreAbonnementListView,
     cgu_view,
     check_app_status,
-    privacy_policy_view
+    privacy_policy_view,
+    suppression_compte_view,
 )
 
 router = DefaultRouter()
@@ -52,6 +53,7 @@ urlpatterns = [
 
     path('privacy-policy/', privacy_policy_view, name='privacy_policy'),
     path('cgu/', cgu_view, name='cgu'),
+    path('suppression-compte/', suppression_compte_view, name='suppression_compte'),
 
 
 ]

@@ -292,6 +292,11 @@ def privacy_policy_view(request):
     policy = PrivacyPolicy.objects.order_by('-derniere_mise_a_jour').first()  # la plus récente
     return render(request, 'privacy.html', {'policy': policy})
 
+def suppression_compte_view(request):
+    """Page publique exigée par Google Play : comment supprimer son compte et ses données."""
+    return render(request, 'suppression_compte.html', {'delai': AppConfiguration.delai_recuperation()})
+
+
 def cgu_view(request):
     cgu = ConditionGenerale.objects.order_by('-derniere_mise_a_jour').first()  # la plus récente
     return render(request, 'cgu.html', {'cgu': cgu})

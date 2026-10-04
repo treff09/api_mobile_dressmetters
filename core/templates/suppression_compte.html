@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dress'Matter | Supprimer mon compte</title>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Montserrat:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #f8f5f0; --text: #1a1a1a; --gold: #bda27e; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: 'Montserrat', sans-serif; }
+        .container { max-width: 720px; margin: 0 auto; padding: 48px 24px 64px; }
+        .carte { background: rgba(255,255,255,.9); padding: 40px; box-shadow: 0 15px 35px rgba(0,0,0,.05); }
+        h1 { font-family: 'Playfair Display', serif; font-size: 2.3em; margin: 0 0 6px; }
+        .sous-titre { color: var(--gold); letter-spacing: 3px; font-size: .8em; text-transform: uppercase; margin: 0 0 30px; }
+        h2 { font-family: 'Playfair Display', serif; color: var(--gold); font-size: 1.4em; margin-top: 36px;
+             border-bottom: 1px dashed var(--gold); padding-bottom: 4px; }
+        p, li { line-height: 1.75; font-weight: 300; }
+        ol li { margin-bottom: 8px; }
+        strong { font-weight: 600; }
+        .encadre { background: #fbf7ef; border-left: 3px solid var(--gold); padding: 14px 18px; margin: 18px 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .95em; }
+        th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #eee5d6; vertical-align: top; font-weight: 300; }
+        th { font-weight: 600; }
+        a { color: #8a6d45; }
+        @media (max-width: 560px) { .carte { padding: 24px; } h1 { font-size: 1.8em; } }
+    </style>
+</head>
+<body>
+<div class="container"><div class="carte">
+    <h1>Supprimer mon compte</h1>
+    <p class="sous-titre">Dress'Matter · Couturier Digital · TREFF COMMUNICATION</p>
+
+    <p>Cette page explique comment supprimer votre compte de l'application <strong>Dress'Matter (Couturier Digital)</strong>,
+       éditée par <strong>TREFF COMMUNICATION</strong> (SARL-U, Angré 8e tranche, Abidjan, Côte d'Ivoire),
+       et ce qu'il advient de vos données.</p>
+
+    <h2>1. Depuis l'application</h2>
+    <ol>
+        <li>Ouvrez l'application et connectez-vous.</li>
+        <li>Allez dans l'onglet <strong>Compte</strong>.</li>
+        <li>Tout en bas, touchez <strong>« Gérer mon compte »</strong>, puis <strong>« Supprimer mon compte »</strong>.</li>
+        <li>Choisissez un motif, puis confirmez.</li>
+    </ol>
+    <p>Vous êtes déconnecté immédiatement, sur tous vos appareils.</p>
+
+    <h2>2. Sans l'application</h2>
+    <p>Écrivez à <a href="mailto:aide@treffcommunication.tech?subject=Suppression%20de%20mon%20compte">aide@treffcommunication.tech</a>
+       avec pour objet <strong>« Suppression de mon compte »</strong>, en indiquant l'adresse e-mail de votre compte.
+       Pour votre sécurité, nous pouvons vous demander de confirmer la demande depuis cette adresse.
+       Nous traitons la demande sous 30 jours au plus.</p>
+
+    <h2>3. Ce qui se passe ensuite</h2>
+    <div class="encadre">
+        Pendant <strong>{{ delai }} jours</strong>, votre compte est désactivé mais récupérable : il vous suffit de vous reconnecter
+        pour le retrouver. Passé ce délai, vos données personnelles sont <strong>effacées définitivement</strong>.
+    </div>
+    <table>
+        <tr><th>Données</th><th>Ce qu'elles deviennent</th></tr>
+        <tr><td>Nom, prénom, nom d'utilisateur, adresse e-mail, mot de passe</td><td>Effacés après {{ delai }} jours</td></tr>
+        <tr><td>Téléphone et nom de l'atelier (couturiers)</td><td>Effacés après {{ delai }} jours</td></tr>
+        <tr><td>Mesures, proches enregistrés (enfants, conjoint…), positions sur le gabarit</td><td>Effacés après {{ delai }} jours</td></tr>
+        <tr><td>Modèles publiés (couturiers)</td><td>Retirés du catalogue immédiatement</td></tr>
+        <tr><td>Commandes et paiements</td><td>Conservés <strong>10 ans</strong> pour nos obligations comptables, <strong>anonymisés</strong> (plus rattachés à votre nom)</td></tr>
+        <tr><td>Journaux techniques</td><td>Supprimés au bout de 12 mois</td></tr>
+    </table>
+
+    <h2>4. Supprimer seulement une partie de vos données</h2>
+    <p>Sans supprimer votre compte, vous pouvez à tout moment modifier ou effacer vos mesures, et supprimer un proche
+       et ses mesures depuis <strong>Compte → Mes mesures</strong>. Pour toute autre demande, écrivez à
+       <a href="mailto:aide@treffcommunication.tech">aide@treffcommunication.tech</a>.</p>
+
+    <p style="margin-top:36px;font-size:.9em;">Voir aussi notre
+       <a href="{% url 'privacy_policy' %}">politique de confidentialité</a> et nos
+       <a href="{% url 'cgu' %}">conditions générales d'utilisation</a>.</p>
+</div></div>
+</body>
+</html>

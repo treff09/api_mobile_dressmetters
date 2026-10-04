@@ -33,7 +33,7 @@ class GenerateQRView(APIView):
         )
         
         # URL que le client scannera
-        qr_url = request.build_absolute_uri(f'/api/v1/qr/access/{qr_token.token}/')
+        qr_url = request.build_absolute_uri(f'/api/v1/qrcode/access/{qr_token.token}/')
 
         qr_image = qrcode_lib.make(qr_url)
         
@@ -74,8 +74,10 @@ class QRAccessView(APIView):
             mesures = MesureClient.objects.filter(client_profile=request.user.client_profile)
             mesures_data = MesureClientSerializer(mesures, many=True).data
                 
-        # 5. Supprime le token après usage (usage unique pour sécurité)
-        qr_token.delete()
+        # 5. Supprime le token après usage (usage unique pour sécurité),
+        #    sauf le QR de démonstration, qui doit pouvoir resservir
+        if not qr_token.permanent:
+            qr_token.delete()
 
         return Response({
             "couturier": {

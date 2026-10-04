@@ -461,7 +461,13 @@ class QRToken(models.Model):
     professional_profile = models.ForeignKey(ProfessionalProfile, on_delete=models.CASCADE)
     token = models.CharField(max_length=22, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # QR de démonstration (examen Google Play) : n'expire pas et sert plusieurs fois.
+    # Créé uniquement par : python manage.py qr_demo
+    permanent = models.BooleanField(default=False)
+
     def is_valid(self):
+        if self.permanent:
+            return True
         return timezone.now() < self.created_at + datetime.timedelta(minutes=5)
 
 

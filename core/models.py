@@ -210,6 +210,10 @@ class OffreAbonnement(models.Model):
     prix = models.DecimalField(max_digits=10, decimal_places=2)
     duree_jours = models.IntegerField(default=30)
     description = models.TextField(blank=True)
+    # Identifiant (ou slug) du produit correspondant sur Chariow, ex. « prd_abc123 ».
+    # Vide = offre non payable en ligne.
+    chariow_product_id = models.CharField(max_length=100, blank=True, default='')
+    actif = models.BooleanField(default=True, help_text="Décocher pour masquer l'offre dans l'application.")
 
     def __str__(self):
         return f"{self.nom} ({self.prix} FCFA)"
@@ -634,3 +638,20 @@ class DepartCompte(models.Model):
     def __str__(self):
         return f"{self.user} - {self.get_action_display()} ({self.date_demande:%d/%m/%Y})"
 
+
+
+
+def modeles_visibles(professional_profile):
+    """
+    Modèles EN LIGNE d'un couturier tels qu'ils doivent apparaître (à lui comme aux clients) :
+    - abonnement actif  -> tous ;
+    - pas d'abonnement / abonnement terminé -> seulement les N plus récents (limite réglable dans l'admin).
+    Vérifié à CHAQUE requête : dès que la date de fin est passée, les modèles en trop disparaissent,
+    sans tâche planifiée ni action manuelle. Rien n'est supprimé : ils reviennent au réabonnement.
+    """
+    from django.utils import timezone
+    qs = ModeleDisponible.objects.filter(professional_profile=professional_profile, actif=True).order_by('-id')
+    actif = Abonnement.objects.filter(professional_profile=professional_profile, date_fin__gt=timezone.now()).exists()
+    if actif:
+        return qs
+    return qs[:AppConfiguration.limite_modeles_gratuits()]

@@ -102,9 +102,14 @@ class TypeVetementSerializer(serializers.ModelSerializer):
         return obj.professional_profile_id is not None
 
 class OffreAbonnementSerializer(serializers.ModelSerializer):
+    paiement_en_ligne = serializers.SerializerMethodField()
+
+    def get_paiement_en_ligne(self, obj):
+        return bool(obj.chariow_product_id)
+
     class Meta:
         model = OffreAbonnement
-        fields = ['id', 'nom', 'prix', 'duree_jours', 'description']
+        fields = ['id', 'nom', 'prix', 'duree_jours', 'description', 'paiement_en_ligne']
 
 class AbonnementSerializer(serializers.ModelSerializer):
     est_actif = serializers.ReadOnlyField()

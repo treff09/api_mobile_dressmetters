@@ -220,3 +220,17 @@ if os.getenv('REDIS_HOST'):
     }
 PAYMENT_GATEWAY_BASE_URL = os.environ.get("PAYMENT_GATEWAY_BASE_URL", "http://localhost:8000/api/payments")
 PAYMENT_GATEWAY_API_KEY = os.environ.get("PAYMENT_GATEWAY_API_KEY", "")
+
+
+# --- CHARIOW (paiement des abonnements) ---
+CHARIOW_API_KEY = os.environ.get('CHARIOW_API_KEY', '')
+CHARIOW_PULSE_SECRET = os.environ.get('CHARIOW_PULSE_SECRET', '')
+CHARIOW_REDIRECT_URL = os.environ.get('CHARIOW_REDIRECT_URL', '')
+CELERY_BEAT_SCHEDULE['relancer-pulses-chariow'] = {
+    'task': 'rechargements.relancer_pulses_en_attente',
+    'schedule': 300.0,
+}
+CELERY_BEAT_SCHEDULE['rappels-fin-abonnement'] = {
+    'task': 'rechargements.rappels_fin_abonnement',
+    'schedule': crontab(hour=9, minute=0),  # une fois par jour
+}

@@ -28,11 +28,19 @@
                 <span class="pulse-dot"></span>
                 <span class="text-xs uppercase tracking-wider" style="color:#a3a3a3;">En attente de validation</span>
             </div>
+            {% if chariow %}
+            <h2 class="text-xl font-bold mb-2">Confirmation du paiement</h2>
+            <p class="text-sm text-gray-400" style="color:#a3a3a3;">
+                Nous attendons la confirmation de Chariow. Ton abonnement s'activera automatiquement,
+                ça prend en général quelques secondes.
+            </p>
+            {% else %}
             <h2 class="text-xl font-bold mb-2">Vérifie ton téléphone</h2>
             <p class="text-sm text-gray-400" style="color:#a3a3a3;">
                 Une demande de paiement {{ provider_label }} a été envoyée sur ton appareil.
                 Valide-la avec ton code pour confirmer.
             </p>
+            {% endif %}
             <p class="text-xs mt-4" style="color:#5c5c5c;">Réf. {{ order_id }}</p>
         </div>
 
@@ -41,6 +49,15 @@
             <h2 class="text-xl font-bold mb-2">Paiement réussi</h2>
             <p class="text-sm text-gray-400 mb-6" style="color:#a3a3a3;" id="success-message"></p>
             <a href="{% url 'web_recharge' %}" class="btn-primary">Retour à mon abonnement</a>
+        </div>
+
+        <div id="state-wait" class="hidden">
+            <div class="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4" style="background-color: rgba(233,30,99,0.15); color:#E91E63;">…</div>
+            <h2 class="text-xl font-bold mb-2" id="wait-title">Pas encore de confirmation</h2>
+            <p class="text-sm text-gray-400 mb-6" style="color:#a3a3a3;" id="wait-text">
+                Si tu as payé, ton abonnement s'activera dès que Chariow nous aura prévenus.
+                Reviens sur cette page dans quelques minutes.</p>
+            <a href="" class="btn-primary">Vérifier à nouveau</a>
         </div>
 
         <div id="state-failed" class="hidden">
@@ -62,6 +79,7 @@
             document.getElementById('state-pending').classList.add('hidden');
             document.getElementById('state-success').classList.add('hidden');
             document.getElementById('state-failed').classList.add('hidden');
+            document.getElementById('state-wait').classList.add('hidden');
             document.getElementById(id).classList.remove('hidden');
         }
 
@@ -81,12 +99,19 @@
                     showState('state-failed');
                     return;
                 }
+                if (data.status === 'REVIEW') {
+                    document.getElementById('wait-title').textContent = 'Paiement en vérification';
+                    document.getElementById('wait-text').textContent =
+                        "Ton paiement est reçu et doit être vérifié par notre équipe. Écris-nous à aide@treffcommunication.tech si besoin.";
+                    showState('state-wait');
+                    return;
+                }
             } catch (e) {
                 // erreur réseau ponctuelle : on continue de réessayer silencieusement
             }
 
             if (attempts >= maxAttempts) {
-                showState('state-failed');
+                showState({{ chariow|yesno:"'state-wait','state-failed'" }});
                 return;
             }
             setTimeout(poll, 3000);

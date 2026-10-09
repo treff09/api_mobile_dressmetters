@@ -63,8 +63,9 @@ class QRAccessView(APIView):
         if not professional_profile.user.is_active:
             return Response({"detail": "Ce couturier n'est plus disponible."}, status=status.HTTP_404_NOT_FOUND)
 
-        # 3. Récupère les modèles EN LIGNE du couturier (pas ceux retirés)
-        modeles = ModeleDisponible.objects.filter(professional_profile=professional_profile, actif=True)
+        # 3. Modèles EN LIGNE du couturier, limités s'il n'a pas (ou plus) d'abonnement actif
+        from core.models import modeles_visibles
+        modeles = modeles_visibles(professional_profile)
         modeles_serializer = ModeleDisponibleSerializer(modeles, many=True)
         
         # 4. Récupère les mesures DYNAMIQUES du client (s'il est connecté)

@@ -42,3 +42,4 @@ zope.interface==8.2
 drf-spectacular==0.30.0
 celery[redis]==5.5.3
 python-dotenv==1.1.1
+phonenumbers==9.0.41

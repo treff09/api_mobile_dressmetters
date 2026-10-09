@@ -21,42 +21,10 @@ class ActiverAbonnementView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        user = request.user
-        if not hasattr(user, 'professional_profile'):
-            return Response({'error': "Profil professionnel introuvable."}, status=status.HTTP_404_NOT_FOUND)
-
-        pro_profile = user.professional_profile
-
-        offre_id = request.data.get('offre_id')
-        if not offre_id:
-            return Response({'error': "ID de l'offre manquant."}, status=status.HTTP_400_BAD_REQUEST)
-
-        offre = get_object_or_404(OffreAbonnement, id=offre_id)
-        now = timezone.now()
-
-        with transaction.atomic():
-            abonnement, created = Abonnement.objects.get_or_create(
-                professional_profile=pro_profile,
-                defaults={'offre': offre, 'date_fin': now}
-            )
-
-            # Si un abonnement est déjà actif, on prolonge à partir de sa date
-            # de fin actuelle plutôt que de repartir de zéro.
-            if not created and abonnement.date_fin and abonnement.date_fin > now:
-                nouvelle_date_fin = abonnement.date_fin + timedelta(days=offre.duree_jours)
-            else:
-                nouvelle_date_fin = now + timedelta(days=offre.duree_jours)
-
-            abonnement.offre = offre
-            abonnement.date_fin = nouvelle_date_fin
-            abonnement.save()
-
-        return Response({
-            'status': 'success',
-            'message': f'Offre {offre.nom} activée',
-            'expire_le': nouvelle_date_fin.strftime("%d/%m/%Y"),
-            'jours_restants': abonnement.jours_restants,
-        }, status=status.HTTP_200_OK)
+        # Fermée : cette route activait l'abonnement SANS paiement. L'activation se fait
+        # désormais uniquement à la réception du Pulse Chariow « successful.sale ».
+        return Response({'error': "Utilise le paiement en ligne pour activer ton abonnement."},
+                        status=status.HTTP_410_GONE)
 
 
 class SubscriptionStatusView(APIView):

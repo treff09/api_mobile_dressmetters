@@ -43,26 +43,18 @@
         <form method="POST">
             {% csrf_token %}
 
-            <p class="text-xs uppercase tracking-wider text-gray-400 mb-3" style="color:#a3a3a3;">Choisis ton opérateur</p>
-
-            {% for code, label in providers.items %}
-            <label class="provider-option">
-                <input type="radio" name="provider" value="{{ code }}" required>
-                {{ label }}
-            </label>
-            {% endfor %}
-
-            <p class="text-xs uppercase tracking-wider text-gray-400 mt-5 mb-2" style="color:#a3a3a3;">Numéro de téléphone</p>
+            <p class="text-xs uppercase tracking-wider text-gray-400 mb-2" style="color:#a3a3a3;">Numéro de téléphone</p>
             <div style="display:flex; align-items:stretch; gap:8px;">
                 <span style="background-color:#2a2a2a; padding:12px 14px; border-radius:10px; font-size:14px; color:#a3a3a3; display:flex; align-items:center;">+225</span>
                 <input type="tel" name="phone_local" value="{{ default_phone_local }}" placeholder="0700000000" required style="flex:1;">
             </div>
 
-            <button type="submit" class="btn-primary mt-6">Payer maintenant</button>
+            <button type="submit" class="btn-primary mt-6">Continuer vers le paiement</button>
         </form>
 
         <p class="text-xs text-gray-600 mt-6 text-center" style="color:#5c5c5c;">
-            Tu recevras une demande de validation directement sur ton téléphone.
+            Tu vas être redirigé vers la page de paiement sécurisée Chariow
+            (Mobile Money ou carte, selon ton pays). Sans engagement : aucun prélèvement automatique.
         </p>
     </div>
 

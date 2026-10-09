@@ -579,7 +579,7 @@ def web_recharge_view(request):
     pro_profile = user.professional_profile
 
     # 🎯 On récupère les vraies offres depuis le modèle Django
-    db_offers = OffreAbonnement.objects.all().order_by('prix')
+    db_offers = OffreAbonnement.objects.filter(actif=True).order_by('prix')
     offers = [
         {"id": offer.id, "nom": offer.nom, "prix": offer.prix, "duree_jours": offer.duree_jours}
         for offer in db_offers
@@ -693,11 +693,33 @@ def build_phone_number(phone_local):
     return local
 
 
+from rechargements.models import PaiementChariow
+from rechargements.views_chariow import PaiementImpossible, demarrer_paiement_chariow, statut_pour_page_attente
+
+
+def _url_retour_chariow(request):
+    """
+    Adresse où Chariow renvoie l'acheteur après paiement. Chariow n'accepte qu'une adresse publique :
+    - site en ligne (https, vrai domaine) -> page d'attente de CE paiement ;
+    - test en local (127.0.0.1, localhost, http) -> CHARIOW_REDIRECT_URL du .env, sinon page par défaut de Chariow.
+    """
+    from urllib.parse import urlparse
+    from django.conf import settings
+    base = request.build_absolute_uri('/')
+    hote = urlparse(base).hostname or ''
+    local = hote in ('localhost', '127.0.0.1', '0.0.0.0') or hote.startswith('192.168.') or hote.startswith('10.') or '.' not in hote
+    if base.startswith('https://') and not local:
+        return base.rstrip('/') + '/payments/attente/{ref}/'
+    return settings.CHARIOW_REDIRECT_URL or None
+
+
 @login_required(login_url='/accounts/web-login/')
 def web_payer_abonnement_view(request, offre_id):
     """
-    GET  : affiche le formulaire de choix d'opérateur + numéro de téléphone
-    POST : initie le paiement via la gateway, redirige vers la page d'attente
+    GET  : récapitulatif de la formule + numéro de téléphone
+    POST : crée le paiement Chariow et redirige vers la page de paiement Chariow.
+           Chariow ramène ensuite l'utilisateur sur la page d'attente.
+    L'abonnement n'est JAMAIS activé ici : seul le webhook Chariow le fait.
     """
     user = request.user
     if not hasattr(user, 'professional_profile'):
@@ -705,73 +727,41 @@ def web_payer_abonnement_view(request, offre_id):
         return redirect('web_login')
 
     pro_profile = user.professional_profile
-    offre = get_object_or_404(OffreAbonnement, id=offre_id)
+    offre = get_object_or_404(OffreAbonnement, id=offre_id, actif=True)
+    contexte = {'offre': offre, 'default_phone_local': strip_225_prefix(pro_profile.numero_telephone or '')}
 
     if request.method == 'GET':
-        return render(request, 'payments/web_payer.html', {
-            'offre': offre,
-            'providers': PUSH_PROVIDERS,
-            'default_phone_local': strip_225_prefix(pro_profile.numero_telephone or ''),
-        })
+        return render(request, 'payments/web_payer.html', contexte)
 
-    provider = request.POST.get('provider')
     phone_local = request.POST.get('phone_local', '').strip()
-    phone_number = build_phone_number(phone_local)
-
-    if provider not in PUSH_PROVIDERS:
-        return render(request, 'payments/web_payer.html', {
-            'offre': offre,
-            'providers': PUSH_PROVIDERS,
-            'default_phone_local': phone_local,
-            'error': "Choisis un opérateur valide.",
-        })
-
+    contexte['default_phone_local'] = phone_local
     if not phone_local:
-        return render(request, 'payments/web_payer.html', {
-            'offre': offre,
-            'providers': PUSH_PROVIDERS,
-            'default_phone_local': phone_local,
-            'error': "Le numéro de téléphone est requis.",
-        })
+        contexte['error'] = "Le numéro de téléphone est requis."
+        return render(request, 'payments/web_payer.html', contexte)
 
-    order_id = generate_order_id(prefix=f"ABO{pro_profile.id}")
-
+    telephone = phone_local if phone_local.startswith('+') else '+' + build_phone_number(phone_local)
     try:
-        gateway_response = initiate_payment(
-            provider=provider,
-            amount=offre.prix,
-            phone_number=phone_number,
-            order_id=order_id,
-        )
-    except GatewayError as exc:
-        return render(request, 'payments/web_payer.html', {
-            'offre': offre,
-            'providers': PUSH_PROVIDERS,
-            'default_phone': phone_number,
-            'error': f"Impossible de contacter le service de paiement : {exc}",
-        })
-
-    AbonnementPaiement.objects.create(
-        order_id=order_id,
-        professional_profile=pro_profile,
-        offre=offre,
-        provider=provider,
-        amount=offre.prix,
-        status=gateway_response.get('status', 'PENDING'),
-    )
-
-    return redirect('web_paiement_attente', order_id=order_id)
+        # Après paiement, Chariow ramène l'utilisateur sur la page d'attente de CE paiement
+        paiement = demarrer_paiement_chariow(request, pro_profile, offre, telephone,
+                                             redirect_url=_url_retour_chariow(request))
+    except PaiementImpossible as e:
+        contexte['error'] = str(e)
+        return render(request, 'payments/web_payer.html', contexte)
+    return redirect(paiement.checkout_url)
 
 
 @login_required(login_url='/accounts/web-login/')
 def web_paiement_attente_view(request, order_id):
     """
-    Page d'attente : affiche "vérifie ton téléphone" et poll en JS
-    web_confirmer_paiement_view toutes les 3 secondes jusqu'à un statut final.
+    Page d'attente après le paiement : interroge web_confirmer_paiement_view toutes les 3 s.
+    Références « DM-… » = Chariow ; les autres = ancienne gateway (historique).
     """
-    paiement = get_object_or_404(
-        AbonnementPaiement, order_id=order_id, professional_profile=request.user.professional_profile
-    )
+    pro = request.user.professional_profile
+    if order_id.startswith('DM-'):
+        paiement = get_object_or_404(PaiementChariow, reference=order_id, professional_profile=pro)
+        return render(request, 'payments/web_attente.html',
+                      {'order_id': order_id, 'provider_label': 'Chariow', 'offre': paiement.offre, 'chariow': True})
+    paiement = get_object_or_404(AbonnementPaiement, order_id=order_id, professional_profile=pro)
     return render(request, 'payments/web_attente.html', {
         'order_id': order_id,
         'provider_label': PUSH_PROVIDERS.get(paiement.provider, paiement.provider),
@@ -782,16 +772,19 @@ def web_paiement_attente_view(request, order_id):
 @login_required(login_url='/accounts/web-login/')
 def web_confirmer_paiement_view(request, order_id):
     """
-    Endpoint JSON pollé par la page d'attente (fetch JS).
-    N'active/prolonge l'abonnement qu'au moment où le statut SUCCESSFUL est
-    obtenu pour la première fois.
+    Endpoint JSON pollé par la page d'attente.
+    Chariow : lecture seule du statut posé par le webhook (aucune activation ici).
     """
-    paiement = get_object_or_404(
-        AbonnementPaiement, order_id=order_id, professional_profile=request.user.professional_profile
-    )
+    pro = request.user.professional_profile
+    if order_id.startswith('DM-'):
+        paiement = get_object_or_404(PaiementChariow, reference=order_id, professional_profile=pro)
+        return JsonResponse(statut_pour_page_attente(paiement))
+
+    # --- Ancienne gateway (paiements historiques) ---
+    paiement = get_object_or_404(AbonnementPaiement, order_id=order_id, professional_profile=pro)
 
     if paiement.applied:
-        abonnement = request.user.professional_profile.abonnement
+        abonnement = pro.abonnement
         return JsonResponse({
             'status': 'SUCCESSFUL',
             'expire_le': abonnement.date_fin.strftime("%d/%m/%Y"),
@@ -811,23 +804,19 @@ def web_confirmer_paiement_view(request, order_id):
         return JsonResponse({'status': gateway_status})
 
     # SUCCESSFUL -> activation/prolongation, une seule fois
-    pro_profile = paiement.professional_profile
     offre = paiement.offre
     now = timezone.now()
-
     with transaction.atomic():
         abonnement, created = Abonnement.objects.get_or_create(
-            professional_profile=pro_profile, defaults={'offre': offre, 'date_fin': now}
+            professional_profile=pro, defaults={'offre': offre, 'date_fin': now}
         )
         if not created and abonnement.date_fin and abonnement.date_fin > now:
             nouvelle_date_fin = abonnement.date_fin + timedelta(days=offre.duree_jours)
         else:
             nouvelle_date_fin = now + timedelta(days=offre.duree_jours)
-
         abonnement.offre = offre
         abonnement.date_fin = nouvelle_date_fin
         abonnement.save()
-
         paiement.applied = True
         paiement.save(update_fields=['applied', 'updated_at'])
 

@@ -121,12 +121,11 @@ class ModeleListAPIView(APIView):
 
             # ?retires=1 -> modèles retirés du catalogue (pour les remettre en ligne)
             retires = request.query_params.get('retires') in ('1', 'true')
-            queryset = ModeleDisponible.objects.filter(
-                professional_profile=pro_profile, actif=not retires
-            ).order_by('-id')
-
-            if not abonnement_actif and not retires:
-                queryset = queryset[:AppConfiguration.limite_modeles_gratuits()]
+            if retires:
+                queryset = ModeleDisponible.objects.filter(professional_profile=pro_profile, actif=False).order_by('-id')
+            else:
+                from core.models import modeles_visibles
+                queryset = modeles_visibles(pro_profile)  # même règle que ce que voient les clients
 
             serializer = ModeleDisponibleSerializer(queryset, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -250,7 +249,7 @@ class TypeVetementListAPIView(generics.ListAPIView):
     serializer_class = TypeVetementSerializer
 
 class OffreAbonnementListView(generics.ListAPIView):
-    queryset = OffreAbonnement.objects.all().order_by('prix')
+    queryset = OffreAbonnement.objects.filter(actif=True).order_by('prix')
     serializer_class = OffreAbonnementSerializer
     permission_classes = [IsAuthenticated]
 

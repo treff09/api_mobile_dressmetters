@@ -1,3 +1,4 @@
+from django.views.decorators.cache import never_cache
 # commandes/views.py
 
 import uuid
@@ -769,6 +770,7 @@ def web_paiement_attente_view(request, order_id):
     })
 
 
+@never_cache
 @login_required(login_url='/accounts/web-login/')
 def web_confirmer_paiement_view(request, order_id):
     """

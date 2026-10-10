@@ -468,11 +468,25 @@ class QRToken(models.Model):
     # QR de démonstration (examen Google Play) : n'expire pas et sert plusieurs fois.
     # Créé uniquement par : python manage.py qr_demo
     permanent = models.BooleanField(default=False)
+    # Premier scan : le QR reste ensuite utilisable 5 minutes (re-scan possible après une fausse manip)
+    premier_scan_le = models.DateTimeField(null=True, blank=True)
+
+    DUREE_AVANT_SCAN = datetime.timedelta(minutes=5)   # QR affiché mais pas encore scanné
+    DUREE_APRES_SCAN = datetime.timedelta(minutes=5)   # après le 1er scan
 
     def is_valid(self):
         if self.permanent:
             return True
-        return timezone.now() < self.created_at + datetime.timedelta(minutes=5)
+        now = timezone.now()
+        if self.premier_scan_le:
+            return now < self.premier_scan_le + self.DUREE_APRES_SCAN
+        return now < self.created_at + self.DUREE_AVANT_SCAN
+
+    def marquer_scan(self):
+        """Note le premier scan (les scans suivants ne prolongent pas le délai)."""
+        if not self.permanent and self.premier_scan_le is None:
+            self.premier_scan_le = timezone.now()
+            self.save(update_fields=['premier_scan_le'])
 
 
 # ============================================================

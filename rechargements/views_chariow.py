@@ -99,8 +99,27 @@ def demarrer_paiement_chariow(request, pro, offre, telephone_brut, redirect_url=
     raise PaiementImpossible("Réponse inattendue du service de paiement.")
 
 
+def _rattraper_pulse(paiement):
+    """
+    Si le webhook de CE paiement est déjà reçu mais pas encore traité (Celery arrêté ou en retard),
+    on le traite tout de suite. Le webhook signé reste la seule source : on ne fait que l'exécuter plus tôt.
+    """
+    if paiement.statut != "EN_ATTENTE":
+        return paiement
+    for pulse in PulseChariow.objects.filter(traite=False).order_by("recu_le"):
+        meta = ((pulse.corps or {}).get("sale") or {}).get("custom_metadata") or {}
+        if meta.get("paiement_ref") == paiement.reference:
+            try:
+                traiter_pulse.apply(args=[pulse.pk])  # exécution immédiate, dans ce processus
+            except Exception as e:  # noqa: BLE001
+                log.warning("Rattrapage du Pulse %s impossible : %s", pulse.delivery_id, e)
+    paiement.refresh_from_db()
+    return paiement
+
+
 def statut_pour_page_attente(paiement):
     """Traduit le statut Chariow pour la page d'attente du site (même format que l'ancienne gateway)."""
+    paiement = _rattraper_pulse(paiement)
     if paiement.statut == "PAYE":
         abo = paiement.professional_profile.abonnement
         return {"status": "SUCCESSFUL", "message": f"Offre {paiement.offre.nom} activée",

@@ -169,6 +169,21 @@ class ChariowTests(TestCase):
         r = self.client.get("/payments/confirmer/DM-W1/")
         self.assertEqual(r.json()["status"], "SUCCESSFUL")
 
+    def test_web_page_attente_rattrape_webhook_non_traite(self):
+        self.client.force_login(self.user)
+        self.paiement(ref="DM-W3")
+        brut = json.dumps(self.corps_vente(ref="DM-W3"), separators=(",", ":")).encode()
+        with mock.patch("rechargements.views_chariow.traiter_pulse.delay", side_effect=Exception("Celery arrêté")):
+            with self.captureOnCommitCallbacks(execute=True):
+                r = self.client.post("/api/v1/subscription/chariow/pulse/", brut, content_type="application/json",
+                                     HTTP_X_CHARIOW_SIGNATURE=signer(brut), HTTP_X_PULSE_DELIVERY_ID="del_W3",
+                                     HTTP_X_PULSE_EVENT="successful.sale")
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(Abonnement.objects.exists())            # Celery n'a rien fait
+        r = self.client.get("/payments/confirmer/DM-W3/")
+        self.assertEqual(r.json()["status"], "SUCCESSFUL")        # la page d'attente rattrape
+        self.assertTrue(Abonnement.objects.get().est_actif)
+
     def test_web_already_purchased(self):
         self.client.force_login(self.user)
         rep = mock.Mock(status_code=200)

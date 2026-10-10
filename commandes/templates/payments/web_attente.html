@@ -72,7 +72,8 @@
     <script>
         const orderId = "{{ order_id }}";
         const confirmUrl = "{% url 'web_confirmer_paiement' order_id %}";
-        const maxAttempts = 40; // ~2 minutes à 3s d'intervalle
+        // Chariow confirme en général en quelques secondes, mais on attend jusqu'à 15 minutes
+        const maxAttempts = {{ chariow|yesno:"300,40" }};
         let attempts = 0;
 
         function showState(id) {
@@ -86,7 +87,12 @@
         async function poll() {
             attempts++;
             try {
-                const res = await fetch(confirmUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                const res = await fetch(confirmUrl, { cache: 'no-store', credentials: 'same-origin',
+                                                      headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (res.redirected || !(res.headers.get('content-type') || '').includes('json')) {
+                    window.location.reload();   // session expirée : on recharge (connexion puis retour ici)
+                    return;
+                }
                 const data = await res.json();
 
                 if (data.status === 'SUCCESSFUL') {
@@ -114,8 +120,16 @@
                 showState({{ chariow|yesno:"'state-wait','state-failed'" }});
                 return;
             }
-            setTimeout(poll, 3000);
+            setTimeout(poll, attempts < 40 ? 3000 : 5000);
         }
+
+        // Quand l'utilisateur revient sur l'onglet (après l'appli Wave/Orange…), on vérifie tout de suite
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && !document.getElementById('state-pending').classList.contains('hidden')) {
+                attempts = Math.min(attempts, maxAttempts - 1);
+                poll();
+            }
+        });
 
         poll();
     </script>

@@ -47,6 +47,15 @@ class GenerateQRView(APIView):
 # ACCÈS VIA LE SCAN DU QR CODE
 # ============================================================
 
+def _nettoyer_codes_expires(pro):
+    from datetime import timedelta
+    from django.db.models import Q
+    from django.utils import timezone
+    limite = timezone.now() - timedelta(minutes=10)
+    QRToken.objects.filter(professional_profile=pro, permanent=False).filter(
+        Q(premier_scan_le__lt=limite) | Q(premier_scan_le__isnull=True, created_at__lt=limite)).delete()
+
+
 class QRAccessView(APIView):
     def get(self, request, token_key):
         # 1. Vérifie si le token existe et est valide
@@ -75,10 +84,11 @@ class QRAccessView(APIView):
             mesures = MesureClient.objects.filter(client_profile=request.user.client_profile)
             mesures_data = MesureClientSerializer(mesures, many=True).data
                 
-        # 5. Supprime le token après usage (usage unique pour sécurité),
-        #    sauf le QR de démonstration, qui doit pouvoir resservir
-        if not qr_token.permanent:
-            qr_token.delete()
+        # 5. Le QR reste valable 5 minutes après le PREMIER scan : si le client sort de l'écran
+        #    par erreur, il peut rescanner sans que le couturier régénère un code.
+        qr_token.marquer_scan()
+        # Ménage : codes expirés de ce couturier (non permanents)
+        _nettoyer_codes_expires(professional_profile)
 
         return Response({
             "couturier": {

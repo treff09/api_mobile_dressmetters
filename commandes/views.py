@@ -1,3 +1,4 @@
+from django.views.decorators.http import require_POST
 from django.views.decorators.cache import never_cache
 # commandes/views.py
 
@@ -55,6 +56,28 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 
+def _prevenir_limite_atteinte(pro, limite):
+    """Prévient le couturier (une fois par mois) qu'une cliente n'a pas pu commander."""
+    from django.utils import timezone
+    from core.models import Notification
+    debut_mois = timezone.localtime().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    titre = "Limite de commandes atteinte"
+    if Notification.objects.filter(user=pro.user, title=titre, created_at__gte=debut_mois).exists():
+        return
+    msg = (f"Tu as reçu tes {limite} commandes gratuites de ce mois. Une cliente vient d'essayer de commander : "
+           f"passe à Premium pour recevoir des commandes sans limite.")
+    Notification.objects.create(user=pro.user, title=titre, message=msg)
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        layer = get_channel_layer()
+        if layer:
+            async_to_sync(layer.group_send)(f"user_{pro.user_id}", {"type": "send_notification",
+                "data": {"type": "LIMITE_COMMANDES", "title": titre, "message": msg}})
+    except Exception:  # noqa: BLE001
+        pass
+
+
 class CommandeCreateView(APIView):
     permission_classes = [IsAuthenticated]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
@@ -98,6 +121,18 @@ class CommandeCreateView(APIView):
             pro_cible = serializer.validated_data.get('professional_profile')
             if pro_cible and not pro_cible.user.is_active:
                 return Response({"error": "Ce couturier n'est plus disponible."}, status=400)
+
+            # Couturier sans Premium : nombre de nouvelles commandes limité par mois (réglable dans l'admin)
+            if pro_cible:
+                from core.models import quota_commandes
+                quota = quota_commandes(pro_cible)
+                if quota['atteinte']:
+                    _prevenir_limite_atteinte(pro_cible, quota['limite'])
+                    return Response({
+                        "error": f"{pro_cible.nom_entreprise or 'Ce couturier'} ne prend plus de nouvelles commandes "
+                                 f"ce mois-ci via l'application. Contacte-le directement ou réessaie le mois prochain.",
+                        "code": "LIMITE_COMMANDES",
+                    }, status=403)
             for art in articles_data:
                 m = art.get('modele_disponible')
                 if m and not m.actif:
@@ -556,6 +591,13 @@ def web_login_view(request):
         'form': form,
         'error_message': error_message,
     })
+
+
+@require_POST
+def web_logout_view(request):
+    """Déconnexion de l'espace abonnement du site (POST + jeton CSRF, comme le recommande Django)."""
+    auth_logout(request)
+    return redirect('web_login')
 
 
 @login_required(login_url='/accounts/web-login/')

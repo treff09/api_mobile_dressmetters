@@ -2,6 +2,7 @@ from django.urls import path
 
 from commandes.views import (
     web_login_view,
+    web_logout_view,
     web_recharge_view,
     web_payer_abonnement_view,
     web_paiement_attente_view,
@@ -10,6 +11,7 @@ from commandes.views import (
 
 urlpatterns = [
     path('accounts/web-login/', web_login_view, name='web_login'),
+    path('accounts/web-logout/', web_logout_view, name='web_logout'),
     path('payments/recharge/', web_recharge_view, name='web_recharge'),
     path('payments/payer/<int:offre_id>/', web_payer_abonnement_view, name='web_payer_abonnement'),
     path('payments/attente/<str:order_id>/', web_paiement_attente_view, name='web_paiement_attente'),

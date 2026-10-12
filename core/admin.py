@@ -27,10 +27,10 @@ from .models import AppConfiguration
 @admin.register(AppConfiguration)
 class AppConfigurationAdmin(admin.ModelAdmin):
     # Correction ici : on utilise 'global_title' au lieu de 'global_notification_title'
-    list_display = ('id', 'is_maintenance_mode', 'nb_modeles_gratuits', 'nb_retraits_gratuits', 'global_title', 'send_to_all_now')
-    list_editable = ('is_maintenance_mode', 'nb_modeles_gratuits', 'nb_retraits_gratuits', 'send_to_all_now')  # modifiable directement dans la liste
+    list_display = ('id', 'is_maintenance_mode', 'nb_modeles_gratuits', 'nb_retraits_gratuits', 'nb_commandes_mensuelles_gratuites', 'global_title', 'send_to_all_now')
+    list_editable = ('is_maintenance_mode', 'nb_modeles_gratuits', 'nb_retraits_gratuits', 'nb_commandes_mensuelles_gratuites', 'send_to_all_now')  # modifiable directement dans la liste
     fieldsets = (
-        ("Couturiers sans abonnement", {"fields": ("nb_modeles_gratuits", "nb_retraits_gratuits")}),
+        ("Couturiers sans abonnement", {"fields": ("nb_modeles_gratuits", "nb_retraits_gratuits", "nb_commandes_mensuelles_gratuites")}),
         ("Comptes supprimés", {"fields": ("delai_recuperation_jours",)}),
         ("Maintenance", {"fields": ("is_maintenance_mode", "maintenance_message")}),
         ("Message à tous les utilisateurs", {"fields": ("global_title", "global_message", "send_to_all_now")}),

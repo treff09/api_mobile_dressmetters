@@ -20,6 +20,12 @@
 
         <div class="flex items-center justify-between mb-6">
             <a href="/" style="color:#a3a3a3; font-size:13px; text-decoration:none;">&larr; Accueil</a>
+            <form method="post" action="{% url 'web_logout' %}" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" style="background:none; border:1px solid rgba(255,255,255,0.15); color:#d4d4d4; font-size:13px; padding:6px 14px; border-radius:9999px; cursor:pointer;">
+                    Se déconnecter
+                </button>
+            </form>
         </div>
 
         <div class="bg-[#1E1E1E] p-6 rounded-2xl border border-white/10 mb-6 text-center" style="background-color:#1E1E1E; border:1px solid rgba(255,255,255,0.1);">

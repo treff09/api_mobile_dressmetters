@@ -11,7 +11,7 @@ import shortuuid
 
 from accounts.permissions import IsProfessionalOrReadOnly
 # On importe les nouveaux modèles et serializers
-from core.models import QRToken, ModeleDisponible, MesureClient 
+from core.models import QRToken, ModeleDisponible, MesureClient, quota_commandes
 from core.serializers import ModeleDisponibleSerializer, MesureClientSerializer
 
 # ============================================================
@@ -96,7 +96,8 @@ class QRAccessView(APIView):
                 "nom_entreprise": professional_profile.nom_entreprise,
                 "nom": professional_profile.nom,
                 "prenom": professional_profile.prenom,
-                "telephone": professional_profile.numero_telephone
+                "telephone": professional_profile.numero_telephone,
+                "accepte_commandes": not quota_commandes(professional_profile)['atteinte'],
             },
             "modeles_disponibles": modeles_serializer.data,
             "mesures_du_client_qui_scanne": mesures_data # Données dynamiques

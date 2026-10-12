@@ -26,7 +26,15 @@
 <body class="min-h-screen">
 
     <div class="max-w-md mx-auto px-4 py-8">
-        <a href="{% url 'web_recharge' %}" style="color:#a3a3a3; font-size:13px; text-decoration:none;">&larr; Retour</a>
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <a href="{% url 'web_recharge' %}" style="color:#a3a3a3; font-size:13px; text-decoration:none;">&larr; Retour</a>
+            <form method="post" action="{% url 'web_logout' %}" style="margin:0;">
+                {% csrf_token %}
+                <button type="submit" style="background:none; border:1px solid rgba(255,255,255,0.15); color:#d4d4d4; font-size:13px; padding:6px 14px; border-radius:9999px; cursor:pointer;">
+                    Se déconnecter
+                </button>
+            </form>
+        </div>
 
         <div class="bg-[#1E1E1E] p-6 rounded-2xl border border-white/10 my-6" style="background-color:#1E1E1E; border:1px solid rgba(255,255,255,0.1);">
             <h2 class="text-lg font-bold mb-1">{{ offre.nom }}</h2>

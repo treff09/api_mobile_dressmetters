@@ -522,6 +522,18 @@ class AppConfiguration(models.Model):
                   "(au total). Avec l'abonnement Premium, c'est illimité.",
     )
 
+    nb_commandes_mensuelles_gratuites = models.PositiveIntegerField(
+        default=10,
+        verbose_name="Commandes par mois sans abonnement",
+        help_text="Nombre de NOUVELLES commandes qu'un couturier SANS abonnement Premium peut recevoir "
+                  "par mois (remis à zéro le 1er du mois). Avec Premium, c'est illimité.",
+    )
+
+    @classmethod
+    def limite_commandes_mensuelles(cls):
+        config = cls.objects.first()
+        return config.nb_commandes_mensuelles_gratuites if config else 10
+
     @classmethod
     def limite_modeles_gratuits(cls):
         config = cls.objects.first()
@@ -669,3 +681,22 @@ def modeles_visibles(professional_profile):
     if actif:
         return qs
     return qs[:AppConfiguration.limite_modeles_gratuits()]
+
+
+
+def quota_commandes(professional_profile):
+    """
+    Commandes reçues par le couturier ce mois-ci et limite applicable.
+    Renvoie {'premium', 'limite' (None si illimité), 'utilisees', 'restantes' (None si illimité), 'atteinte'}.
+    Le mois suit le fuseau de l'application (début du mois à 00:00).
+    """
+    from django.utils import timezone
+    now = timezone.localtime()
+    debut_mois = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    utilisees = Commande.objects.filter(professional_profile=professional_profile, date_creation__gte=debut_mois).count()
+    premium = Abonnement.objects.filter(professional_profile=professional_profile, date_fin__gt=timezone.now()).exists()
+    if premium:
+        return {'premium': True, 'limite': None, 'utilisees': utilisees, 'restantes': None, 'atteinte': False}
+    limite = AppConfiguration.limite_commandes_mensuelles()
+    return {'premium': False, 'limite': limite, 'utilisees': utilisees,
+            'restantes': max(limite - utilisees, 0), 'atteinte': utilisees >= limite}

@@ -56,5 +56,10 @@ class SubscriptionStatusView(APIView):
             data["nb_modeles"] = ModeleDisponible.objects.filter(professional_profile=pro, actif=True).count()
             data["limite_retraits_gratuits"] = AppConfiguration.limite_retraits_gratuits()
             data["nb_retraits"] = pro.nb_retraits
+            from core.models import quota_commandes
+            q = quota_commandes(pro)
+            data["limite_commandes_mois"] = q['limite']          # None = illimité (Premium)
+            data["nb_commandes_mois"] = q['utilisees']
+            data["commandes_restantes_mois"] = q['restantes']
 
         return Response(data, status=status.HTTP_200_OK)

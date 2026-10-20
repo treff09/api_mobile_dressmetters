@@ -54,7 +54,7 @@ class ClientProfileMinimalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClientProfile
-        fields = ['nom', 'prenom', 'username', 'mesures_client']
+        fields = ['nom', 'prenom', 'username', 'numero_telephone', 'mesures_client']
 
 class ModeleDisponibleDetailSerializer(serializers.ModelSerializer):
     """Affiche les détails du modèle avec URL d'image complète pour Flutter."""
@@ -131,6 +131,8 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
     """Le sérialiseur principal pour afficher les listes de commandes (Client & Pro)."""
     articles = ModeleCommandeDetailSerializer(many=True, read_only=True)
     nom_entreprise = serializers.CharField(source='professional_profile.nom_entreprise', read_only=True)
+    # Pour le bouton WhatsApp côté client
+    telephone_couturier = serializers.CharField(source='professional_profile.numero_telephone', read_only=True, default='')
     client_profile = ClientProfileMinimalSerializer(read_only=True)
     
     class Meta:
@@ -139,7 +141,7 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
             'id', 'client_profile', 'nom_entreprise', 'professional_profile',
             'date_creation', 'date_livraison', 'statut', 'articles',
             'total_commande', 'montant_paye', 'reste_a_payer', 'statut_paiement',
-            'moyen_paiement', 'acompte_demande', 'type_paiement',
+            'moyen_paiement', 'acompte_demande', 'type_paiement', 'telephone_couturier',
         ]
 
 # ============================================================

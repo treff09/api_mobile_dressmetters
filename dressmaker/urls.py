@@ -7,7 +7,12 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,)
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from commandes.views import landing_page_view
+from qr_code.views import ouvrir_lien_couturier, assetlinks
+
 urlpatterns = [
+    # Lien partagé par le couturier (WhatsApp…) + Android App Links
+    path('c/<str:token>/', ouvrir_lien_couturier, name='lien-couturier'),
+    path('.well-known/assetlinks.json', assetlinks, name='assetlinks'),
     # Site vitrine (page d'accueil publique)
     path('', landing_page_view, name='landing'),
     # Chemin pour le panneau d'administration de Django

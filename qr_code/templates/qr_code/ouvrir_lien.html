@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if valide %}{{ nom }} sur Dress'Matter{% else %}Dress'Matter{% endif %}</title>
+<meta property="og:title" content="{% if valide %}Commande chez {{ nom }} sur Dress'Matter{% else %}Dress'Matter{% endif %}">
+<meta property="og:description" content="Vois les modèles, envoie tes mesures et suis ta commande depuis l'appli.">
+<style>
+  :root{--fond:#0F1B33;--carte:#17284A;--or:#D4AF37;--rose:#E8A0B4;--texte:#F8F5F0;--doux:#C9C2B5}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--fond);color:var(--texte);
+       font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+  .carte{width:100%;max-width:420px;background:var(--carte);border-radius:24px;padding:32px 24px;text-align:center}
+  .logo{font-family:Georgia,serif;font-size:30px;font-weight:700;margin:0 0 4px}
+  .logo span{color:var(--or)}
+  h1{font-size:21px;margin:22px 0 8px}
+  p{color:var(--doux);line-height:1.5;margin:0 0 14px;font-size:15px}
+  .btn{display:block;width:100%;padding:16px;border-radius:14px;font-weight:700;font-size:16px;text-decoration:none;margin-top:12px;min-height:48px}
+  .or{background:var(--or);color:var(--fond)}
+  .contour{border:1.5px solid var(--doux);color:var(--texte)}
+  .petit{font-size:13px;margin-top:18px}
+  .cache{display:none}
+</style>
+</head>
+<body>
+<main class="carte">
+  <p class="logo">Dress'<span>Matter</span></p>
+  <p>Ton couturier, dans ta poche.</p>
+
+  {% if valide %}
+    <h1>Commande chez {{ nom }}</h1>
+    <p>Vois ses modèles, envoie tes mesures et suis ta commande dans l'appli.</p>
+  {% else %}
+    <h1>Lien expiré</h1>
+    <p>Ce lien n'est plus valable. Demande à ton couturier de t'en envoyer un nouveau.</p>
+  {% endif %}
+
+  <!-- Android -->
+  <div id="android" class="cache">
+    {% if valide %}<a class="btn or" href="{{ intent_android }}">Ouvrir dans l'appli</a>{% endif %}
+    <a class="btn {% if valide %}contour{% else %}or{% endif %}" href="{{ play_store }}">Télécharger sur Google Play</a>
+    <p class="petit">Après l'installation, touche à nouveau le lien reçu : les modèles s'ouvriront directement.</p>
+  </div>
+
+  <!-- iPhone -->
+  <div id="ios" class="cache">
+    {% if app_store %}
+      {% if valide %}<a class="btn or" href="{{ lien_appli }}">Ouvrir dans l'appli</a>{% endif %}
+      <a class="btn contour" href="{{ app_store }}">Télécharger sur l'App Store</a>
+    {% else %}
+      <p><strong>Bientôt disponible sur iPhone.</strong> L'appli est déjà disponible sur Android.</p>
+    {% endif %}
+  </div>
+
+  <!-- Ordinateur -->
+  <div id="ordi" class="cache">
+    <p>Ouvre ce lien sur ton téléphone pour commander.</p>
+    <a class="btn contour" href="{{ play_store }}">Voir sur Google Play</a>
+  </div>
+</main>
+<script>
+  (function () {
+    var ua = navigator.userAgent || "";
+    var estAndroid = /android/i.test(ua);
+    var estIOS = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    var bloc = estAndroid ? "android" : (estIOS ? "ios" : "ordi");
+    document.getElementById(bloc).classList.remove("cache");
+    {% if valide %}
+    // Essai automatique d'ouverture de l'appli (sinon Android bascule vers le Play Store)
+    if (estAndroid) { window.location.href = "{{ intent_android|escapejs }}"; }
+    {% if app_store %}
+    if (estIOS) {
+      window.location.href = "{{ lien_appli|escapejs }}";
+      setTimeout(function () { if (!document.hidden) window.location.href = "{{ app_store|escapejs }}"; }, 1600);
+    }
+    {% endif %}
+    {% endif %}
+  })();
+</script>
+</body>
+</html>

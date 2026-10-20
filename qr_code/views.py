@@ -32,8 +32,9 @@ class GenerateQRView(APIView):
             token=token_key
         )
         
-        # URL que le client scannera
-        qr_url = request.build_absolute_uri(f'/api/v1/qrcode/access/{qr_token.token}/')
+        # Lien que le client scannera : dans l'appli (scanner) OU avec l'appareil photo du
+        # téléphone (ouvre l'appli si installée, sinon propose de la télécharger)
+        qr_url = lien_couturier(request, qr_token.token)
 
         qr_image = qrcode_lib.make(qr_url)
         
@@ -102,3 +103,89 @@ class QRAccessView(APIView):
             "modeles_disponibles": modeles_serializer.data,
             "mesures_du_client_qui_scanne": mesures_data # Données dynamiques
         }, status=status.HTTP_200_OK)
+
+# ============================================================
+# LIEN DE PARTAGE (WhatsApp, statut…)
+# ============================================================
+# Un QR affiché en boutique expire vite (5 min). Pour WhatsApp, le couturier
+# partage un LIEN PERMANENT : https://<site>/c/<code>/
+#  • appli installée  → le lien ouvre directement ses modèles dans l'appli ;
+#  • appli absente    → la page web propose de la télécharger (selon Android / iPhone).
+
+import os
+from urllib.parse import quote
+
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
+from django.views.decorators.cache import never_cache
+
+PACKAGE_ANDROID = "com.trefftechnologies.dressmatter"
+LIEN_PLAY_STORE = f"https://play.google.com/store/apps/details?id={PACKAGE_ANDROID}"
+
+
+def _base_site(request):
+    base = os.getenv("SITE_URL", "").strip().rstrip("/")
+    return base or request.build_absolute_uri("/").rstrip("/")
+
+
+def lien_couturier(request, token):
+    return f"{_base_site(request)}/c/{token}/"
+
+
+class LienPartageView(APIView):
+    """GET → {lien, code, qr_png_base64}. ?nouveau=1 désactive l'ancien lien et en crée un autre."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        import base64
+        pro = getattr(request.user, 'professional_profile', None)
+        if pro is None:
+            return Response({"detail": "Réservé aux couturiers."}, status=status.HTTP_403_FORBIDDEN)
+        if request.query_params.get('nouveau') == '1':
+            QRToken.objects.filter(professional_profile=pro, permanent=True).delete()
+        qr = QRToken.objects.filter(professional_profile=pro, permanent=True).first()
+        if qr is None:
+            qr = QRToken.objects.create(professional_profile=pro, token=shortuuid.uuid(), permanent=True)
+        lien = lien_couturier(request, qr.token)
+        buffer = BytesIO()
+        qrcode_lib.make(lien).save(buffer, format='PNG')
+        return Response({
+            "lien": lien,
+            "code": qr.token,
+            "qr_png_base64": base64.b64encode(buffer.getvalue()).decode(),
+        })
+
+
+@never_cache
+def ouvrir_lien_couturier(request, token):
+    """Page ouverte quand on touche le lien hors de l'appli (ou sans l'appli)."""
+    qr = QRToken.objects.filter(token=token).select_related('professional_profile__user').first()
+    valide = bool(qr and qr.is_valid() and qr.professional_profile.user.is_active)
+    pro = qr.professional_profile if valide else None
+    lien_appli = f"dressmatter://c/{token}"
+    intent_android = (
+        f"intent://c/{token}#Intent;scheme=dressmatter;package={PACKAGE_ANDROID};"
+        f"S.browser_fallback_url={quote(LIEN_PLAY_STORE, safe='')};end"
+    )
+    return render(request, 'qr_code/ouvrir_lien.html', {
+        "valide": valide,
+        "nom": (pro.nom_entreprise or f"{pro.prenom} {pro.nom}".strip()) if pro else "",
+        "token": token,
+        "lien_appli": lien_appli,
+        "intent_android": intent_android,
+        "play_store": LIEN_PLAY_STORE,
+        "app_store": os.getenv("APP_STORE_URL", "").strip(),
+    })
+
+
+def assetlinks(request):
+    """Android App Links : le lien https s'ouvre dans l'appli sans passer par le navigateur.
+    Mettre dans le .env : ANDROID_SHA256=AA:BB:…  (Play Console > Intégrité de l'appli >
+    Signature d'application > empreinte SHA-256). Plusieurs empreintes séparées par des virgules."""
+    empreintes = [e.strip() for e in os.getenv("ANDROID_SHA256", "").split(",") if e.strip()]
+    data = [{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {"namespace": "android_app", "package_name": PACKAGE_ANDROID,
+                   "sha256_cert_fingerprints": empreintes},
+    }] if empreintes else []
+    return JsonResponse(data, safe=False)

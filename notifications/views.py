@@ -34,6 +34,7 @@ def get_notifications(request):
         data.append({
             "title": n.title,
             "message": n.message,
+            "commande_id": n.commande_id,  # permet d'ouvrir la commande d'un appui
             "created_at_formatted": n.created_at.strftime("%H:%M") 
         })
         

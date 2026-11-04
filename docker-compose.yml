@@ -1,0 +1,29 @@
+﻿services:
+  redis:
+    image: redis:7-alpine
+    container_name: dressmatter-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  celery:
+    image: python:3.12-slim
+    container_name: dressmatter-celery
+    working_dir: /app
+    volumes:
+      - .:/app
+      - pip-cache:/root/.cache/pip
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      PYTHONUNBUFFERED: "1"
+    command: >
+      sh -c "pip install -q -r requirements.txt &&
+             celery -A dressmaker worker -B -l info --pool=solo"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  pip-cache:

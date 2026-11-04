@@ -66,13 +66,24 @@ class ProfessionalRegistrationSerializer(serializers.Serializer):
     nom = serializers.CharField(max_length=100)
     prenom = serializers.CharField(max_length=100)
     numero_telephone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    # Code d'un couturier qui l'a invité (facultatif)
+    code_parrainage = serializers.CharField(max_length=12, required=False, allow_blank=True, write_only=True)
+
+    def validate_code_parrainage(self, v):
+        v = (v or '').strip().upper()
+        if v and not ProfessionalProfile.objects.filter(code_parrainage=v).exists():
+            raise serializers.ValidationError("Code de parrainage inconnu.")
+        return v
 
     def create(self, validated_data):
+        code = validated_data.pop('code_parrainage', '')
         # 1. Créer l'utilisateur
         user_data = validated_data.pop('user')
         user = User.objects.create_user(**user_data)
         
         # 2. Créer le profil pro
+        if code:
+            validated_data['parrain'] = ProfessionalProfile.objects.filter(code_parrainage=code).first()
         pro_profile = ProfessionalProfile.objects.create(user=user, **validated_data)
 
         return pro_profile
@@ -120,7 +131,8 @@ class ProfessionalProfileSerializer(serializers.ModelSerializer):
     user = UserSimpleSerializer(read_only=True)
     class Meta:
         model = ProfessionalProfile
-        fields = ['user', 'nom_entreprise', 'nom', 'prenom', 'numero_telephone']
+        fields = ['user', 'nom_entreprise', 'nom', 'prenom', 'numero_telephone',
+                  'ville', 'quartier', 'adresse', 'latitude', 'longitude', 'visible_sur_carte']
 
 class ClientProfileSerializer(serializers.ModelSerializer):
     user = UserSimpleSerializer(read_only=True)

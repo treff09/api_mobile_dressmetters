@@ -124,10 +124,20 @@ class ModeleDisponibleSerializer(serializers.ModelSerializer):
     mesures_requises = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
     # Écriture : "12,15,18" (plus simple à envoyer en multipart depuis Flutter)
     mesures_requises_ids = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    # Écriture : "cote,dos" pour enlever ces photos lors d'une modification
+    retirer_vues = serializers.CharField(write_only=True, required=False, allow_blank=True)
+
+    def _retirer_vues(self, modele, brut):
+        for vue in str(brut or '').replace(' ', '').split(','):
+            champ = {'cote': 'image_cote', 'dos': 'image_dos'}.get(vue)
+            if champ and getattr(modele, champ):
+                getattr(modele, champ).delete(save=False)
+                setattr(modele, champ, None)
 
     class Meta:
         model = ModeleDisponible
-        fields = ['id', 'professional_profile', 'type_vetement', 'nom', 'description', 'image', 'price', 'acompte',
+        fields = ['id', 'professional_profile', 'type_vetement', 'nom', 'description', 'image',
+                  'image_cote', 'image_dos', 'retirer_vues', 'price', 'acompte',
                   'mesures_requises', 'mesures_requises_ids']
         read_only_fields = ['professional_profile']
 
@@ -139,6 +149,7 @@ class ModeleDisponibleSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         brut = validated_data.pop('mesures_requises_ids', None)
+        validated_data.pop('retirer_vues', None)
         request = self.context.get('request')
         if request and hasattr(request.user, 'professional_profile'):
             validated_data['professional_profile'] = request.user.professional_profile
@@ -148,6 +159,7 @@ class ModeleDisponibleSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         brut = validated_data.pop('mesures_requises_ids', None)
+        self._retirer_vues(instance, validated_data.pop('retirer_vues', None))
         modele = super().update(instance, validated_data)
         self._appliquer_mesures(modele, brut)
         return modele

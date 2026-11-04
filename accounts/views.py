@@ -40,54 +40,52 @@ logger = logging.getLogger(__name__)
 
 def send_stylized_otp_email(target_email, otp_code):
     """
-    Envoie un email HTML stylisé en forçant l'affichage de COUTURIER DIGITAL.
+    E-mail du code de vérification, écrit pour ne pas finir en spam :
+    nom d'expéditeur = la marque, texte brut complet + HTML propre, pas de majuscules partout,
+    adresse de réponse. (Le plus important reste le DNS du domaine : SPF, DKIM, DMARC.)
     """
-    subject = f"{otp_code} est votre code de vérification"
-    
-    # On définit explicitement le nom et l'email
-    display_name = "COUTURIER DIGITAL"
-    sender_email = settings.EMAIL_HOST_USER
-    
-    # formataddr crée la chaîne "COUTURIER DIGITAL <votre@email.com>"
-    full_sender = formataddr((display_name, sender_email))
-    
-    html_content = f"""
-    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 550px; margin: 0 auto; border: 1px solid #f0f0f0; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-        <div style="background-color: #E91E63; padding: 35px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 26px; letter-spacing: 3px; text-transform: uppercase; font-weight: 900;">COUTURIER DIGITAL</h1>
-        </div>
-        <div style="padding: 40px 30px; text-align: center; background-color: #ffffff;">
-            <h2 style="color: #333; margin-top: 0; font-size: 22px;">Vérification de sécurité</h2>
-            <p style="color: #555; font-size: 16px; line-height: 1.6;">Pour finaliser votre opération sur <strong>COUTURIER DIGITAL</strong>, veuillez utiliser le code de confirmation suivant :</p>
-            
-            <div style="margin: 40px 0;">
-                <div style="background-color: #FFF0F5; border: 2px solid #E91E63; display: inline-block; padding: 20px 40px; border-radius: 12px;">
-                    <span style="font-size: 42px; font-weight: 800; color: #E91E63; letter-spacing: 10px;">{otp_code}</span>
-                </div>
-            </div>
-            
-            <p style="color: #888; font-size: 14px; font-style: italic;">Ce code est à usage unique et expire dans 15 minutes.</p>
-        </div>
-        <div style="background-color: #f9f9f9; padding: 25px; text-align: center; border-top: 1px solid #eeeeee;">
-            <p style="margin: 0; font-size: 13px; color: #aaa; letter-spacing: 0.5px;">&copy; 2024 COUTURIER DIGITAL - L'excellence sur mesure.</p>
-        </div>
-    </div>
-    """
-    
-    text_content = f"Votre code de vérification COUTURIER DIGITAL est : {otp_code}"
+    import datetime
+    subject = f"Votre code Dress'Matter : {otp_code}"
+    full_sender = formataddr(("Dress'Matter", settings.EMAIL_HOST_USER))
+    annee = datetime.date.today().year
 
-    # On crée l'objet email
+    text_content = (
+        f"Bonjour,\n\n"
+        f"Votre code de vérification Dress'Matter est : {otp_code}\n\n"
+        f"Il est valable 15 minutes. Si vous n'avez pas demandé ce code, ignorez simplement cet e-mail.\n\n"
+        f"L'équipe Dress'Matter\n"
+        f"TREFF COMMUNICATION, Abidjan - aide@treffcommunication.tech\n"
+    )
+
+    html_content = f"""<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Votre code Dress'Matter</title></head>
+<body style="margin:0;padding:24px 12px;background:#f5f3ef;font-family:Arial,Helvetica,sans-serif;color:#222">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px">
+    <tr><td style="padding:28px 28px 8px;text-align:center">
+      <p style="margin:0;font-size:22px;font-weight:bold;color:#0F1B33">Dress'Matter</p>
+    </td></tr>
+    <tr><td style="padding:8px 28px 0;text-align:center">
+      <p style="font-size:16px;line-height:1.5;margin:16px 0">Bonjour,<br>voici votre code de vérification :</p>
+      <p style="font-size:34px;font-weight:bold;letter-spacing:8px;color:#C2185B;margin:20px 0">{otp_code}</p>
+      <p style="font-size:14px;color:#666;line-height:1.5;margin:0 0 24px">Il est valable 15 minutes.<br>
+      Si vous n'avez pas demandé ce code, ignorez simplement cet e-mail.</p>
+    </td></tr>
+    <tr><td style="padding:16px 28px 24px;text-align:center;border-top:1px solid #eee">
+      <p style="margin:0;font-size:12px;color:#888">&copy; {annee} TREFF COMMUNICATION, Abidjan<br>
+      Besoin d'aide ? aide@treffcommunication.tech</p>
+    </td></tr>
+  </table>
+</body></html>"""
+
     msg = EmailMultiAlternatives(
         subject=subject,
         body=text_content,
-        from_email=full_sender, # On passe le formataddr ici
+        from_email=full_sender,
         to=[target_email],
-        headers={'From': full_sender} # On FORCE le header From pour les serveurs capricieux
+        reply_to=["aide@treffcommunication.tech"],
     )
-    
     msg.attach_alternative(html_content, "text/html")
-    
-    # Envoi
     msg.send(fail_silently=False)
 
 class ClientRegistrationView(APIView):
@@ -398,28 +396,8 @@ from rest_framework.permissions import AllowAny
 logger = logging.getLogger(__name__)
 
 def send_password_reset_otp(target_email, otp_code):
-    """Envoie le code OTP avec le design COUTURIER DIGITAL."""
-    subject = f"{otp_code} est votre code de récupération"
-    from_email = formataddr(("COUTURIER DIGITAL", settings.EMAIL_HOST_USER))
-    
-    html_content = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto; border: 1px solid #f0f0f0; border-radius: 12px; overflow: hidden;">
-        <div style="background-color: #E91E63; padding: 25px; text-align: center;">
-            <h1 style="color: white; margin: 0; font-size: 22px;">COUTURIER DIGITAL</h1>
-        </div>
-        <div style="padding: 40px 20px; text-align: center;">
-            <h2 style="color: #333;">Récupération de compte</h2>
-            <p style="color: #666;">Vous avez demandé la réinitialisation de votre mot de passe. Utilisez le code suivant :</p>
-            <div style="margin: 30px 0;">
-                <span style="font-size: 36px; font-weight: bold; color: #E91E63; letter-spacing: 5px; border: 2px dashed #E91E63; padding: 10px 20px;">{otp_code}</span>
-            </div>
-            <p style="color: #999; font-size: 12px;">Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>
-        </div>
-    </div>
-    """
-    msg = EmailMultiAlternatives(subject, f"Votre code : {otp_code}", from_email, [target_email])
-    msg.attach_alternative(html_content, "text/html")
-    msg.send()
+    """Code de récupération du mot de passe (même e-mail propre que l'inscription)."""
+    send_stylized_otp_email(target_email, otp_code)
 
 
 class ForgotPasswordView(APIView):

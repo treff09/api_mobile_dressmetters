@@ -185,7 +185,7 @@ EMAIL_SSL_CONTEXT = ssl._create_unverified_context()
 
 # Sécurité pour éviter le None dans le FROM
 if EMAIL_HOST_USER:
-    DEFAULT_FROM_EMAIL = formataddr(("COUTURIER DIGITAL", EMAIL_HOST_USER))
+    DEFAULT_FROM_EMAIL = formataddr(("Dress'Matter", EMAIL_HOST_USER))
 else:
     DEFAULT_FROM_EMAIL = "COUTURIER DIGITAL <noreply@couturier-digital.com>"
     
@@ -233,4 +233,10 @@ CELERY_BEAT_SCHEDULE['relancer-pulses-chariow'] = {
 CELERY_BEAT_SCHEDULE['rappels-fin-abonnement'] = {
     'task': 'rechargements.rappels_fin_abonnement',
     'schedule': crontab(hour=9, minute=0),  # une fois par jour
+}
+
+# Rappels d'échéance (livraison, essayage, reste à payer) — client ET couturier
+CELERY_BEAT_SCHEDULE['rappels-echeances'] = {
+    'task': 'core.rappels_echeances',
+    'schedule': crontab(hour=8, minute=0),  # chaque matin
 }

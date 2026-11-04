@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "719215363051",
+    "project_id": "dressmetter",
+    "storage_bucket": "dressmetter.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:719215363051:android:756c0dea78ba3c70348fae",
+        "android_client_info": {
+          "package_name": "com.trefftechnologies.dressmatter"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjJZ_nruIU5KlymwukHG_WnqmeGqZD--o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

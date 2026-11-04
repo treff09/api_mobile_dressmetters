@@ -101,3 +101,24 @@ class DepartCompteAdmin(admin.ModelAdmin):
             n += 1
         self.message_user(request, f"{n} compte(s) réactivé(s).")
 
+
+
+# ── Suivi, avis, notifications push ─────────────────────────
+from core.models import AvisCouturier, PaiementCommande, AppareilPush  # noqa: E402
+
+
+@admin.register(AvisCouturier)
+class AvisCouturierAdmin(admin.ModelAdmin):
+    list_display = ('professional_profile', 'note', 'client_profile', 'date', 'visible')
+    list_filter = ('visible', 'note')
+    list_editable = ('visible',)  # masquer un avis abusif
+
+
+@admin.register(PaiementCommande)
+class PaiementCommandeAdmin(admin.ModelAdmin):
+    list_display = ('commande', 'montant', 'moyen', 'date')
+
+
+@admin.register(AppareilPush)
+class AppareilPushAdmin(admin.ModelAdmin):
+    list_display = ('user', 'plateforme', 'maj_le')

@@ -16,7 +16,7 @@ urlpatterns = [
     # Site vitrine (page d'accueil publique)
     path('', landing_page_view, name='landing'),
     # Chemin pour le panneau d'administration de Django
-    path('la-vie/admin/', admin.site.urls),
+    path('admin/', admin.site.urls),
     # --- DOCUMENTATION SWAGGER AUTOMATIQUE ---
     # Télécharge le fichier de schéma brut (JSON/YAML)
     path('schema/', SpectacularAPIView.as_view(), name='schema'),

@@ -103,6 +103,10 @@ class CommandeCreateView(APIView):
                 'image_personnalisee': data.get(f'articles[{i}]image_personnalisee'),
                 'type_vetement': type_id,
             }
+            # Autres vues du modèle personnalisé (facultatives)
+            for vue in ('image_personnalisee_cote', 'image_personnalisee_dos'):
+                if data.get(f'articles[{i}]{vue}'):
+                    article[vue] = data.get(f'articles[{i}]{vue}')
             # Photo du tissu envoyée directement avec la commande (facultative)
             if data.get(f'articles[{i}]image_tissu'):
                 article['image_tissu'] = data.get(f'articles[{i}]image_tissu')
@@ -227,6 +231,8 @@ class CommandeCreateView(APIView):
                             commande=commande,
                             modele_disponible=modele_dispo,
                             image_personnalisee=art_data.get('image_personnalisee'),
+                            image_personnalisee_cote=art_data.get('image_personnalisee_cote'),
+                            image_personnalisee_dos=art_data.get('image_personnalisee_dos'),
                             image_tissu=art_data.get('image_tissu'),
                             type_vetement=art_data.get('type_vetement'),
                             personne=personne,
@@ -457,6 +463,9 @@ class CommandeUpdateStatusView(APIView):
     def patch(self, request, pk):
         try:
             commande = Commande.objects.get(pk=pk)
+            # Seul le couturier de la commande peut changer son statut
+            if commande.professional_profile.user_id != request.user.id:
+                return Response({"error": "Action réservée au couturier de cette commande."}, status=403)
             nouveau_statut = request.data.get('statut')
             client_user = commande.client_profile.user
             channel_layer = get_channel_layer()
@@ -484,8 +493,11 @@ class CommandeUpdateStatusView(APIView):
                 # comme totalement payée/livrée.
                 with transaction.atomic():
                     commande.montant_paye = commande.total_commande
+                    commande.reste_a_payer = 0
                     commande.statut = 'Terminées'
                     commande.statut_paiement = 'TOTALEMENT_PAYE'
+                    commande.etape = 'LIVREE'
+                    commande.etape_maj_le = timezone.now()
                     commande.save()
 
             else:
@@ -494,16 +506,13 @@ class CommandeUpdateStatusView(APIView):
                 commande.save()
 
             # --- ENVOI DE NOTIFICATION AU CLIENT (DB + WEBSOCKET) ---
-            msg_text = f"Votre commande #{commande.id} est maintenant : {nouveau_statut}"
-            Notification.objects.create(user=client_user, title="Statut Commande", message=msg_text, commande_id=commande.id)
-            
-            async_to_sync(channel_layer.group_send)(
-                f"user_{client_user.id}",
-                {
-                    "type": "send_notification",
-                    "data": {"type": "STATUS_UPDATE", "title": "Commande", "message": msg_text, "commande_id": commande.id}
-                }
-            )
+            if est_terminee:
+                msg_text = f"Ta commande #{commande.id} est livrée. Merci ! Laisse un avis à ton couturier ⭐"
+            else:
+                msg_text = f"Votre commande #{commande.id} est maintenant : {nouveau_statut}"
+            # Liste + temps réel + téléphone (sans planter si le temps réel est indisponible)
+            from core.push import notifier
+            notifier(client_user, "Statut Commande", msg_text, commande.id, 'STATUS_UPDATE')
 
             return Response({"message": "Statut mis à jour."}, status=200)
 

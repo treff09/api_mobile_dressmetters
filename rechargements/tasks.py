@@ -80,7 +80,22 @@ def _verifier_et_appliquer(p, sale, sale_id):
     p.statut = "PAYE"
     p.applique = True
     p.save()
+    # Parrainage : bonus pour le parrain APRÈS validation du paiement (n'y touche jamais)
+    _bonus_parrain_apres_commit(p.professional_profile_id)
     return None
+
+
+def _bonus_parrain_apres_commit(pro_id):
+    from django.db import transaction as _tx
+
+    def _go():
+        try:
+            from core.models import ProfessionalProfile
+            from commandes.views_suivi import recompenser_parrain
+            recompenser_parrain(ProfessionalProfile.objects.get(id=pro_id))
+        except Exception as e:  # noqa: BLE001
+            log.error("Bonus parrainage non appliqué : %s", e)
+    _tx.on_commit(_go)
 
 
 def traiter_vente_ratee(corps, statut):

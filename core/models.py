@@ -20,6 +20,17 @@ class ProfessionalProfile(models.Model):
     nom = models.CharField(max_length=100, blank=True)
     prenom = models.CharField(max_length=100, blank=True)
     numero_telephone = models.CharField(max_length=20, blank=True, unique=True)
+    # Localisation de l'atelier (carte « couturiers près de moi »)
+    ville = models.CharField(max_length=80, blank=True, default='')
+    quartier = models.CharField(max_length=120, blank=True, default='')
+    adresse = models.CharField(max_length=255, blank=True, default='', help_text="Repère : « Près de la pharmacie… »")
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    visible_sur_carte = models.BooleanField(default=True)
+    # Parrainage : « Invite un couturier, gagne 1 mois Premium »
+    code_parrainage = models.CharField(max_length=12, unique=True, null=True, blank=True)
+    parrain = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='filleuls')
+    parrainage_recompense = models.BooleanField(default=False, help_text="Le parrain a déjà reçu son mois offert pour ce filleul")
     # Nombre de modèles retirés du catalogue (limité sans abonnement)
     nb_retraits = models.PositiveIntegerField(default=0)
 
@@ -308,7 +319,10 @@ class ModeleDisponible(models.Model):
     nom = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     # Fonction get_image_filename à définir ou remplacer par un chemin standard
-    image = models.ImageField(upload_to='modeles/', blank=True, null=True) 
+    image = models.ImageField(upload_to='modeles/', blank=True, null=True)  # vue de FACE (principale)
+    # Autres vues, facultatives : le client vérifie bien le modèle avant de commander
+    image_cote = models.ImageField(upload_to='modeles/', blank=True, null=True)
+    image_dos = models.ImageField(upload_to='modeles/', blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     # Montant de l'acompte demandé au client à la commande, DÉCIDÉ PAR LE
     # COUTURIER lui-même (plus de calcul automatique à 50%).
@@ -358,6 +372,19 @@ class Commande(models.Model):
     date_livraison = models.DateTimeField(default=timezone.now, null=True, blank=True)
     
     statut = models.CharField(max_length=50, default='En attente')
+
+    # Étapes de fabrication (le client est prévenu à chaque étape)
+    ETAPES = [
+        ('RECUE', 'Commande reçue'),
+        ('COUPE', 'Coupe du tissu'),
+        ('COUTURE', 'Couture'),
+        ('ESSAYAGE', 'Prête pour essayage'),
+        ('PRETE', 'Prête à récupérer'),
+        ('LIVREE', 'Livrée'),
+    ]
+    etape = models.CharField(max_length=12, choices=ETAPES, default='RECUE')
+    etape_maj_le = models.DateTimeField(null=True, blank=True)
+    date_essayage = models.DateTimeField(null=True, blank=True)
     
     # Finances
     total_commande = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -423,6 +450,9 @@ class ModeleCommande(models.Model):
         null=True, 
         blank=True
     )
+    # Autres vues du modèle personnalisé (facultatives)
+    image_personnalisee_cote = models.ImageField(upload_to=upload_modele_personnalise, null=True, blank=True)
+    image_personnalisee_dos = models.ImageField(upload_to=upload_modele_personnalise, null=True, blank=True)
     # Photo du tissu fourni par le client
     image_tissu = models.ImageField(
         upload_to=upload_tissu_client,
@@ -700,3 +730,48 @@ def quota_commandes(professional_profile):
     limite = AppConfiguration.limite_commandes_mensuelles()
     return {'premium': False, 'limite': limite, 'utilisees': utilisees,
             'restantes': max(limite - utilisees, 0), 'atteinte': utilisees >= limite}
+
+
+
+# ============================================================
+# SUIVI : PAIEMENTS, AVIS, APPAREILS (notifications push)
+# ============================================================
+
+class PaiementCommande(models.Model):
+    """Argent reçu par le couturier pour une commande (hors appli : espèces / Mobile Money)."""
+    commande = models.ForeignKey(Commande, on_delete=models.CASCADE, related_name='paiements')
+    montant = models.DecimalField(max_digits=10, decimal_places=2)
+    moyen = models.CharField(max_length=20, choices=Commande.MOYEN_PAIEMENT_CHOICES, default='ESPECE')
+    note = models.CharField(max_length=200, blank=True, default='')
+    date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date']
+
+
+class AvisCouturier(models.Model):
+    """Note laissée par le client après la livraison (une par commande)."""
+    commande = models.OneToOneField(Commande, on_delete=models.CASCADE, related_name='avis')
+    professional_profile = models.ForeignKey(ProfessionalProfile, on_delete=models.CASCADE, related_name='avis')
+    client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name='avis_donnes')
+    note = models.PositiveSmallIntegerField()  # 1 à 5
+    commentaire = models.TextField(blank=True, default='')
+    date = models.DateTimeField(auto_now_add=True)
+    visible = models.BooleanField(default=True, help_text="Décocher pour masquer un avis abusif")
+
+    class Meta:
+        ordering = ['-date']
+
+
+def note_moyenne(pro):
+    from django.db.models import Avg, Count
+    r = AvisCouturier.objects.filter(professional_profile=pro, visible=True).aggregate(m=Avg('note'), n=Count('id'))
+    return (round(r['m'], 1) if r['m'] else None), r['n']
+
+
+class AppareilPush(models.Model):
+    """Téléphone qui reçoit les notifications (jeton Firebase Cloud Messaging)."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='appareils_push')
+    token = models.CharField(max_length=512, unique=True)
+    plateforme = models.CharField(max_length=10, default='android')
+    maj_le = models.DateTimeField(auto_now=True)

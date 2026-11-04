@@ -59,10 +59,24 @@ class ClientProfileMinimalSerializer(serializers.ModelSerializer):
 class ModeleDisponibleDetailSerializer(serializers.ModelSerializer):
     """Affiche les détails du modèle avec URL d'image complète pour Flutter."""
     image = serializers.SerializerMethodField()
+    image_cote = serializers.SerializerMethodField()
+    image_dos = serializers.SerializerMethodField()
 
     class Meta:
         model = ModeleDisponible
-        fields = ['id', 'nom', 'description', 'price', 'acompte', 'image']
+        fields = ['id', 'nom', 'description', 'price', 'acompte', 'image', 'image_cote', 'image_dos']
+
+    def _url(self, f):
+        if not f:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(f.url) if request else f.url
+
+    def get_image_cote(self, obj):
+        return self._url(obj.image_cote)
+
+    def get_image_dos(self, obj):
+        return self._url(obj.image_dos)
         
     def get_image(self, obj):
         if obj.image:
@@ -74,6 +88,8 @@ class ModeleDisponibleDetailSerializer(serializers.ModelSerializer):
 class ModeleCommandeDetailSerializer(serializers.ModelSerializer):
     # URL absolue du modèle personnalisé (commandes/custom/)
     image_personnalisee = serializers.SerializerMethodField()
+    image_personnalisee_cote = serializers.SerializerMethodField()
+    image_personnalisee_dos = serializers.SerializerMethodField()
     # URL absolue de la photo du tissu (commandes/tissu/)
     image_tissu = serializers.SerializerMethodField()
     mesures_figees = ValeurMesureCommandeSerializer(many=True, read_only=True)
@@ -88,6 +104,8 @@ class ModeleCommandeDetailSerializer(serializers.ModelSerializer):
             'id',
             'modele_disponible',
             'image_personnalisee',   # modèle custom → commandes/custom/
+            'image_personnalisee_cote',
+            'image_personnalisee_dos',
             'image_tissu',           # photo tissu   → commandes/tissu/
             'mesures_figees',
             'prix_unitaire_snapshot',
@@ -109,6 +127,18 @@ class ModeleCommandeDetailSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.image_personnalisee.url)
             return obj.image_personnalisee.url
         return None
+
+    def _url(self, f):
+        if not f:
+            return None
+        request = self.context.get('request')
+        return request.build_absolute_uri(f.url) if request else f.url
+
+    def get_image_personnalisee_cote(self, obj):
+        return self._url(obj.image_personnalisee_cote)
+
+    def get_image_personnalisee_dos(self, obj):
+        return self._url(obj.image_personnalisee_dos)
 
     def get_modele_disponible(self, obj):
         """Sérialise le modèle disponible en propageant le context (request)."""
@@ -133,6 +163,17 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
     nom_entreprise = serializers.CharField(source='professional_profile.nom_entreprise', read_only=True)
     # Pour le bouton WhatsApp côté client
     telephone_couturier = serializers.CharField(source='professional_profile.numero_telephone', read_only=True, default='')
+    # Étapes de fabrication, essayage, paiements reçus, avis du client
+    suivi = serializers.SerializerMethodField()
+    avis = serializers.SerializerMethodField()
+
+    def get_suivi(self, obj):
+        from commandes.views_suivi import suivi_json
+        return suivi_json(obj)
+
+    def get_avis(self, obj):
+        a = getattr(obj, 'avis', None)
+        return {"note": a.note, "commentaire": a.commentaire} if a else None
     client_profile = ClientProfileMinimalSerializer(read_only=True)
     
     class Meta:
@@ -142,6 +183,7 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
             'date_creation', 'date_livraison', 'statut', 'articles',
             'total_commande', 'montant_paye', 'reste_a_payer', 'statut_paiement',
             'moyen_paiement', 'acompte_demande', 'type_paiement', 'telephone_couturier',
+            'etape', 'date_essayage', 'suivi', 'avis',
         ]
 
 # ============================================================
@@ -169,7 +211,8 @@ class ModeleCommandeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ModeleCommande
-        fields = ['modele_disponible', 'image_personnalisee', 'image_tissu', 'type_vetement', 'mesures']
+        fields = ['modele_disponible', 'image_personnalisee', 'image_personnalisee_cote', 'image_personnalisee_dos',
+                  'image_tissu', 'type_vetement', 'mesures']
 
 
 from django.db import transaction

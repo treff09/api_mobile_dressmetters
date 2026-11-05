@@ -78,3 +78,35 @@ def notifier(user, titre, message, commande_id=None, type_notif='INFO'):
                 "type": type_notif, "title": titre, "message": message, "commande_id": commande_id}})
     except Exception:  # noqa: BLE001
         pass
+
+
+def envoyer_push_masse(user_ids, titre, message, donnees=None):
+    """Envoie un même message à beaucoup d'utilisateurs, par paquets de 500 téléphones."""
+    app = _firebase()
+    if app is None:
+        return 0
+    from firebase_admin import messaging
+    from core.models import AppareilPush
+    tokens = list(AppareilPush.objects.filter(user_id__in=user_ids).values_list('token', flat=True))
+    donnees = {k: str(v) for k, v in (donnees or {}).items() if v is not None}
+    envoyes, morts = 0, []
+    for i in range(0, len(tokens), 500):
+        lot = tokens[i:i + 500]
+        msg = messaging.MulticastMessage(
+            tokens=lot, notification=messaging.Notification(title=titre, body=message), data=donnees,
+            android=messaging.AndroidConfig(priority='high', notification=messaging.AndroidNotification(
+                channel_id='dressmatter', sound='default')),
+            apns=messaging.APNSConfig(payload=messaging.APNSPayload(aps=messaging.Aps(sound='default'))),
+        )
+        try:
+            rep = messaging.send_each_for_multicast(msg, app=app)
+        except Exception as e:  # noqa: BLE001
+            logger.error("Envoi push en masse échoué : %s", e)
+            continue
+        envoyes += rep.success_count
+        morts += [lot[k] for k, r in enumerate(rep.responses)
+                  if not r.success and r.exception and getattr(r.exception, 'code', '') in (
+                      'registration-token-not-registered', 'invalid-argument', 'NOT_FOUND', 'UNREGISTERED')]
+    if morts:
+        AppareilPush.objects.filter(token__in=morts).delete()
+    return envoyes

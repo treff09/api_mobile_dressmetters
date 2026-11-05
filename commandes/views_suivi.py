@@ -104,13 +104,24 @@ class EssayageCommandeView(APIView):
             return Response({"error": "Date invalide."}, status=400)
         if d is not None and timezone.is_naive(d):
             d = timezone.make_aware(d)
+        ancienne = c.date_essayage
+        if ancienne == d:
+            return Response(suivi_json(c))  # rien n'a changé : pas de notification
         c.date_essayage = d
         c.save(update_fields=['date_essayage'])
-        if d:
-            loc = timezone.localtime(d)
+        atelier = c.professional_profile.nom_entreprise
+        fmt = lambda x: f"{timezone.localtime(x):%d/%m} à {timezone.localtime(x):%Hh%M}"
+        if d and not ancienne:
             notifier(c.client_profile.user, "Rendez-vous d'essayage",
-                     f"Essayage de ta commande #{c.id} le {loc:%d/%m} à {loc:%Hh%M} chez {c.professional_profile.nom_entreprise}.",
-                     c.id, 'ESSAYAGE')
+                     f"Essayage de ta commande #{c.id} le {fmt(d)} chez {atelier}.", c.id, 'ESSAYAGE')
+        elif d and ancienne:
+            notifier(c.client_profile.user, "Essayage déplacé",
+                     f"Ton essayage (commande #{c.id}) est déplacé : nouveau rendez-vous le {fmt(d)} "
+                     f"(au lieu du {fmt(ancienne)}) chez {atelier}.", c.id, 'ESSAYAGE')
+        else:
+            notifier(c.client_profile.user, "Essayage annulé",
+                     f"Ton rendez-vous d'essayage du {fmt(ancienne)} (commande #{c.id}) est annulé. "
+                     f"{atelier} te recontactera.", c.id, 'ESSAYAGE')
         return Response(suivi_json(c))
 
 

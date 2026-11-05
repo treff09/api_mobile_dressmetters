@@ -1,0 +1,39 @@
+# Redis + Celery (worker et beat) dans Docker, pour le développement sur Windows.
+# Django et Flutter se lancent à part, normalement, sur Windows.
+#
+#   Démarrer :  docker compose -f docker-compose.celery.yml up -d
+#   Logs     :  docker compose -f docker-compose.celery.yml logs -f celery
+#   Arrêter  :  docker compose -f docker-compose.celery.yml down
+#
+# Dans le .env de Django (Windows), garder : REDIS_HOST=127.0.0.1
+# (les conteneurs, eux, utilisent automatiquement REDIS_HOST=redis)
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: dressmatter-redis
+    ports:
+      - "6379:6379"        # Django sur Windows y accède par 127.0.0.1:6379
+    restart: unless-stopped
+
+  celery:
+    image: python:3.12-slim
+    container_name: dressmatter-celery
+    working_dir: /app
+    volumes:
+      - .:/app                         # le code (et db.sqlite3) partagé avec Windows
+      - pip-cache:/root/.cache/pip
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis                # dans Docker, Redis s'appelle « redis »
+      PYTHONUNBUFFERED: "1"
+    command: >
+      sh -c "pip install -q -r requirements.txt &&
+             celery -A dressmaker worker -B -l info --pool=solo"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+volumes:
+  pip-cache:

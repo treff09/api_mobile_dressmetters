@@ -76,3 +76,31 @@ class SuiviTests(TestCase):
         abo = Abonnement.objects.get(professional_profile=self.pro)
         self.assertGreater(abo.date_fin, timezone.now() + timedelta(days=29))
         self.assertTrue(code)
+
+
+class EssayageEtDiffusionTests(SuiviTests):
+    def test_essayage_deplace_et_annule(self):
+        url = f'/api/v1/commandes/{self.c.id}/essayage/'
+        d1 = (timezone.now() + timedelta(days=3)).isoformat()
+        d2 = (timezone.now() + timedelta(days=4)).isoformat()
+        self.api_pro.patch(url, {'date_essayage': d1}, format='json')
+        self.api_pro.patch(url, {'date_essayage': d1}, format='json')   # même date : rien
+        self.api_pro.patch(url, {'date_essayage': d2}, format='json')
+        self.api_pro.patch(url, {'date_essayage': None}, format='json')
+        titres = list(Notification.objects.filter(user=self.cu, commande_id=self.c.id).values_list('title', flat=True))
+        self.assertEqual(titres.count("Rendez-vous d'essayage"), 1)
+        self.assertIn("Essayage déplacé", titres)
+        self.assertIn("Essayage annulé", titres)
+
+    def test_message_admin_cible_et_telephones(self):
+        from unittest import mock
+        from core.models import AppConfiguration
+        cfg = AppConfiguration.objects.create()
+        with mock.patch('core.push.envoyer_push_masse', return_value=1) as push, \
+             self.captureOnCommitCallbacks(execute=True):
+            cfg.global_title = 'Nouveauté'; cfg.global_message = 'Bonjour les couturiers'
+            cfg.destinataires = 'COUTURIERS'; cfg.send_to_all_now = True; cfg.save()
+        self.assertTrue(Notification.objects.filter(user=self.pu, title='Nouveauté').exists())
+        self.assertFalse(Notification.objects.filter(user=self.cu, title='Nouveauté').exists())
+        self.assertEqual(push.call_args[0][0], [self.pu.id])
+        cfg.refresh_from_db(); self.assertFalse(cfg.send_to_all_now)

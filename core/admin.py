@@ -33,7 +33,10 @@ class AppConfigurationAdmin(admin.ModelAdmin):
         ("Couturiers sans abonnement", {"fields": ("nb_modeles_gratuits", "nb_retraits_gratuits", "nb_commandes_mensuelles_gratuites")}),
         ("Comptes supprimés", {"fields": ("delai_recuperation_jours",)}),
         ("Maintenance", {"fields": ("is_maintenance_mode", "maintenance_message")}),
-        ("Message à tous les utilisateurs", {"fields": ("global_title", "global_message", "send_to_all_now")}),
+        ("Message à tous les utilisateurs", {
+            "fields": ("global_title", "global_message", "destinataires", "send_to_all_now"),
+            "description": "Coche « ENVOYER », puis Enregistrer : le message arrive dans l'appli ET sur les téléphones (même appli fermée).",
+        }),
     )
 
     # Empêche la création de plusieurs lignes (Singleton)

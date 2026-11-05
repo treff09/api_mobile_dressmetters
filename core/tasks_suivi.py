@@ -65,3 +65,30 @@ def rappels_echeances():
                         notifier(u, "Essayage demain", t, c.id)
                         n += 1
     return f"{n} rappel(s) envoyé(s)"
+
+
+@shared_task(name='core.diffuser_message')
+def diffuser_message(titre, message, cible='TOUS'):
+    """Message de l'admin : liste de l'appli + temps réel + téléphones (appli fermée)."""
+    from django.contrib.auth import get_user_model
+    from core.models import Notification
+    from core.push import envoyer_push_masse
+    users = get_user_model().objects.filter(is_active=True)
+    if cible == 'CLIENTS':
+        users = users.filter(client_profile__isnull=False)
+    elif cible == 'COUTURIERS':
+        users = users.filter(professional_profile__isnull=False)
+    ids = list(users.values_list('id', flat=True))
+    Notification.objects.bulk_create([Notification(user_id=i, title=titre, message=message) for i in ids])
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+        layer = get_channel_layer()
+        if layer:
+            for i in ids:
+                async_to_sync(layer.group_send)(f"user_{i}", {"type": "send_notification",
+                                                             "data": {"title": titre, "message": message, "type": "GLOBAL"}})
+    except Exception:  # noqa: BLE001  (temps réel indisponible : la liste et les téléphones suffisent)
+        pass
+    envoyes = envoyer_push_masse(ids, titre, message, {"type": "GLOBAL"})
+    return f"{len(ids)} destinataire(s), {envoyes} téléphone(s) notifié(s)"

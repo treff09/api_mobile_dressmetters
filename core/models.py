@@ -539,6 +539,9 @@ class AppConfiguration(models.Model):
     global_title = models.CharField(max_length=150, blank=True)
     global_message = models.TextField(blank=True)
     send_to_all_now = models.BooleanField(default=False, verbose_name="🚀 ENVOYER EN TEMPS RÉEL")
+    DESTINATAIRES = [('TOUS', 'Tout le monde'), ('CLIENTS', 'Clients seulement'), ('COUTURIERS', 'Couturiers seulement')]
+    destinataires = models.CharField(max_length=12, choices=DESTINATAIRES, default='TOUS',
+                                     verbose_name="Envoyer à")
     nb_modeles_gratuits = models.PositiveIntegerField(
         default=5,
         verbose_name="Modèles gratuits par couturier",
@@ -588,20 +591,22 @@ class AppConfiguration(models.Model):
         return config.nb_retraits_gratuits if config else 3
 
     def save(self, *args, **kwargs):
-        if self.send_to_all_now and self.global_message:
-            all_users = User.objects.all()
-            channel_layer = get_channel_layer()
-            
-            notifications = [Notification(user=u, title=self.global_title, message=self.global_message) for u in all_users]
-            Notification.objects.bulk_create(notifications)
-
-            for user in all_users:
-                async_to_sync(channel_layer.group_send)(
-                    f"user_{user.id}",
-                    {"type": "send_notification", "data": {"title": self.global_title, "message": self.global_message, "type": "GLOBAL"}}
-                )
-            self.send_to_all_now = False
+        envoyer = self.send_to_all_now and self.global_message
+        titre, message, cible = self.global_title or "Dress'Matter", self.global_message, self.destinataires
+        self.send_to_all_now = False
         super().save(*args, **kwargs)
+        if envoyer:
+            # Liste de l'appli + temps réel + TÉLÉPHONES (appli fermée), en arrière-plan
+            from django.db import transaction as _tx
+
+            def _lancer():
+                try:
+                    from core.tasks_suivi import diffuser_message
+                    diffuser_message.delay(titre, message, cible)
+                except Exception:  # Celery arrêté : envoi direct
+                    from core.tasks_suivi import diffuser_message
+                    diffuser_message(titre, message, cible)
+            _tx.on_commit(_lancer)
 
 
 class PrivacyPolicy(models.Model):

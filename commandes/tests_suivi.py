@@ -104,3 +104,31 @@ class EssayageEtDiffusionTests(SuiviTests):
         self.assertFalse(Notification.objects.filter(user=self.cu, title='Nouveauté').exists())
         self.assertEqual(push.call_args[0][0], [self.pu.id])
         cfg.refresh_from_db(); self.assertFalse(cfg.send_to_all_now)
+
+
+class EnvoiCibleTests(SuiviTests):
+    def test_personne_choisie_et_groupe(self):
+        from unittest import mock
+        from core.models import EnvoiMessage
+        with mock.patch('core.push.envoyer_push_masse', return_value=1) as push, \
+             self.captureOnCommitCallbacks(execute=True):
+            m = EnvoiMessage.objects.create(titre='Coucou', message='Juste pour toi', cible='PERSONNES')
+            m.personnes.set([self.cu]); m.envoyer()
+        self.assertTrue(Notification.objects.filter(user=self.cu, title='Coucou').exists())
+        self.assertFalse(Notification.objects.filter(user=self.pu, title='Coucou').exists())
+        self.assertEqual(push.call_args[0][0], [self.cu.id])
+        m.refresh_from_db(); self.assertIsNotNone(m.envoye_le)
+        # renvoyer ne double pas
+        with self.captureOnCommitCallbacks(execute=True):
+            m.envoyer()
+        self.assertEqual(Notification.objects.filter(title='Coucou').count(), 1)
+        from core.tasks_suivi import destinataires_ids
+        self.assertEqual(destinataires_ids('COUTURIERS_GRATUITS'), [self.pu.id])
+        self.assertEqual(destinataires_ids('COUTURIERS_PREMIUM'), [])
+
+    def test_admin_formulaire(self):
+        from django.contrib.auth import get_user_model
+        admin_u = get_user_model().objects.create_superuser('adm', 'adm@x.ci', 'x12345')
+        self.client.force_login(admin_u)
+        r = self.client.get('/admin/core/enviomessage/add/'.replace('envio', 'envoi'))
+        self.assertEqual(r.status_code, 200)

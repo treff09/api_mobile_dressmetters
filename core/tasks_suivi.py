@@ -67,18 +67,36 @@ def rappels_echeances():
     return f"{n} rappel(s) envoyé(s)"
 
 
-@shared_task(name='core.diffuser_message')
-def diffuser_message(titre, message, cible='TOUS'):
-    """Message de l'admin : liste de l'appli + temps réel + téléphones (appli fermée)."""
+def destinataires_ids(cible='TOUS', user_ids=None, ville=''):
+    """Ids des utilisateurs visés : une liste précise, ou un groupe (+ ville facultative)."""
     from django.contrib.auth import get_user_model
-    from core.models import Notification
-    from core.push import envoyer_push_masse
+    from django.db.models import Q
+    from django.utils import timezone
     users = get_user_model().objects.filter(is_active=True)
+    if cible == 'PERSONNES':
+        return list(users.filter(id__in=user_ids or []).values_list('id', flat=True))
+    maintenant = timezone.now()
     if cible == 'CLIENTS':
         users = users.filter(client_profile__isnull=False)
     elif cible == 'COUTURIERS':
         users = users.filter(professional_profile__isnull=False)
-    ids = list(users.values_list('id', flat=True))
+    elif cible == 'COUTURIERS_PREMIUM':
+        users = users.filter(professional_profile__abonnement__date_fin__gt=maintenant)
+    elif cible == 'COUTURIERS_GRATUITS':
+        users = users.filter(professional_profile__isnull=False).exclude(
+            professional_profile__abonnement__date_fin__gt=maintenant)
+    if ville:
+        users = users.filter(Q(professional_profile__ville__icontains=ville)
+                             | Q(professional_profile__quartier__icontains=ville))
+    return list(users.values_list('id', flat=True).distinct())
+
+
+@shared_task(name='core.diffuser_message')
+def diffuser_message(titre, message, cible='TOUS', user_ids=None, ville=''):
+    """Message de l'admin : liste de l'appli + temps réel + téléphones (appli fermée)."""
+    from core.models import Notification
+    from core.push import envoyer_push_masse
+    ids = destinataires_ids(cible, user_ids, ville)
     Notification.objects.bulk_create([Notification(user_id=i, title=titre, message=message) for i in ids])
     try:
         from asgiref.sync import async_to_sync

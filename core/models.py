@@ -780,3 +780,53 @@ class AppareilPush(models.Model):
     token = models.CharField(max_length=512, unique=True)
     plateforme = models.CharField(max_length=10, default='android')
     maj_le = models.DateTimeField(auto_now=True)
+
+
+
+class EnvoiMessage(models.Model):
+    """Message envoyé par l'admin à une personne, un groupe ou tout le monde (avec historique)."""
+    CIBLES = [
+        ('PERSONNES', 'Personnes choisies'),
+        ('TOUS', 'Tout le monde'),
+        ('CLIENTS', 'Tous les clients'),
+        ('COUTURIERS', 'Tous les couturiers'),
+        ('COUTURIERS_PREMIUM', 'Couturiers Premium'),
+        ('COUTURIERS_GRATUITS', 'Couturiers sans abonnement'),
+    ]
+    titre = models.CharField(max_length=150)
+    message = models.TextField()
+    cible = models.CharField("Envoyer à", max_length=24, choices=CIBLES, default='PERSONNES')
+    personnes = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='messages_recus',
+                                       help_text="Seulement si « Personnes choisies ».")
+    ville = models.CharField("Ville ou quartier (facultatif)", max_length=80, blank=True, default='',
+                             help_text="Limite un groupe de couturiers à une ville / un quartier, ex. Cocody.")
+    cree_le = models.DateTimeField(auto_now_add=True)
+    envoye_le = models.DateTimeField(null=True, blank=True)
+    resultat = models.CharField(max_length=200, blank=True, default='')
+
+    class Meta:
+        ordering = ['-cree_le']
+        verbose_name = "Message envoyé"
+        verbose_name_plural = "Messages envoyés"
+
+    def __str__(self):
+        return self.titre
+
+    def envoyer(self):
+        """Envoie (une seule fois) : liste de l'appli + temps réel + téléphones."""
+        if self.envoye_le:
+            return
+        from django.db import transaction as _tx
+        ids = list(self.personnes.values_list('id', flat=True)) if self.cible == 'PERSONNES' else None
+        EnvoiMessage.objects.filter(pk=self.pk).update(envoye_le=timezone.now(), resultat="Envoi en cours…")
+        pk, titre, message, cible, ville = self.pk, self.titre, self.message, self.cible, self.ville
+
+        def _lancer():
+            from core.tasks_suivi import diffuser_message
+            try:
+                res = diffuser_message.delay(titre, message, cible, ids, ville)
+                EnvoiMessage.objects.filter(pk=pk).update(resultat="Envoyé (en arrière-plan)")
+            except Exception:  # Celery arrêté : envoi direct
+                res = diffuser_message(titre, message, cible, ids, ville)
+                EnvoiMessage.objects.filter(pk=pk).update(resultat=str(res)[:200])
+        _tx.on_commit(_lancer)

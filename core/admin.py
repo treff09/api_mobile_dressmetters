@@ -125,3 +125,47 @@ class PaiementCommandeAdmin(admin.ModelAdmin):
 @admin.register(AppareilPush)
 class AppareilPushAdmin(admin.ModelAdmin):
     list_display = ('user', 'plateforme', 'maj_le')
+
+
+
+# ── Messages ciblés (une personne, un groupe, tout le monde) ──
+from django.contrib import messages as _msg  # noqa: E402
+from core.models import EnvoiMessage  # noqa: E402
+
+
+@admin.register(EnvoiMessage)
+class EnvoiMessageAdmin(admin.ModelAdmin):
+    list_display = ('titre', 'cible', 'nb_personnes', 'ville', 'envoye_le', 'resultat')
+    list_filter = ('cible',)
+    search_fields = ('titre', 'message')
+    autocomplete_fields = ('personnes',)
+    readonly_fields = ('envoye_le', 'resultat')
+    fieldsets = (
+        (None, {
+            "fields": ("titre", "message", "cible", "personnes", "ville"),
+            "description": "Le message arrive dans la liste de l'appli ET sur le téléphone (même appli fermée). "
+                           "Il part dès que tu cliques Enregistrer.",
+        }),
+        ("Envoi", {"fields": ("envoye_le", "resultat")}),
+    )
+
+    @admin.display(description="Personnes")
+    def nb_personnes(self, obj):
+        return obj.personnes.count() if obj.cible == 'PERSONNES' else "—"
+
+    def get_readonly_fields(self, request, obj=None):
+        # Un message déjà parti n'est plus modifiable (on garde l'historique exact)
+        if obj and obj.envoye_le:
+            return ('titre', 'message', 'cible', 'personnes', 'ville', 'envoye_le', 'resultat')
+        return self.readonly_fields
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)  # les personnes choisies sont enregistrées ici
+        obj = form.instance
+        if obj.envoye_le:
+            return
+        if obj.cible == 'PERSONNES' and not obj.personnes.exists():
+            self.message_user(request, "Choisis au moins une personne : le message n'est pas parti.", _msg.WARNING)
+            return
+        obj.envoyer()
+        self.message_user(request, f"Message « {obj.titre} » envoyé.", _msg.SUCCESS)

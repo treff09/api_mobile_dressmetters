@@ -64,6 +64,14 @@ def suivi_json(c):
         "date_essayage": c.date_essayage,
         "paiements": [{"id": p.id, "montant": p.montant, "moyen": p.moyen, "note": p.note, "date": p.date}
                       for p in c.paiements.all()],
+        # Montants tenus à jour par le serveur (incluent « C'est livré » = tout payé)
+        "total": c.total_commande,
+        "montant_paye": c.montant_paye,
+        "reste_a_payer": c.reste_a_payer,
+        "statut_paiement": c.statut_paiement,
+        "type_paiement": c.type_paiement,
+        "acompte_demande": c.acompte_demande,
+        "moyen_paiement": c.moyen_paiement,
     }
 
 

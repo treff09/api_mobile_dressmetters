@@ -14,6 +14,16 @@ User = get_user_model()
 # PARTIE 1 : PROFILS UTILISATEURS
 # ============================================================
 
+DEVISES = [
+    ('XOF', 'Franc CFA (UEMOA) — FCFA'), ('XAF', 'Franc CFA (CEMAC) — FCFA'),
+    ('EUR', 'Euro — €'), ('USD', 'Dollar américain — $'), ('GBP', 'Livre sterling — £'),
+    ('CAD', 'Dollar canadien — $ CA'), ('CHF', 'Franc suisse — CHF'),
+    ('GHS', 'Cedi ghanéen — GH₵'), ('NGN', 'Naira — ₦'), ('MAD', 'Dirham marocain — DH'),
+    ('GNF', 'Franc guinéen — FG'), ('CDF', 'Franc congolais — FC'), ('KES', 'Shilling kényan — KSh'),
+    ('ZAR', 'Rand — R'),
+]
+
+
 class ProfessionalProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='professional_profile')
     nom_entreprise = models.CharField(max_length=255)
@@ -31,6 +41,10 @@ class ProfessionalProfile(models.Model):
     code_parrainage = models.CharField(max_length=12, unique=True, null=True, blank=True)
     parrain = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='filleuls')
     parrainage_recompense = models.BooleanField(default=False, help_text="Le parrain a déjà reçu son mois offert pour ce filleul")
+    # Devise des prix de l'atelier (modèles, commandes, paiements reçus). N'affecte pas l'abonnement.
+    devise = models.CharField(max_length=3, choices=DEVISES, default='XOF')
+    # Le couturier a choisi sa devise (question posée à la première connexion)
+    devise_confirmee = models.BooleanField(default=False)
     # Nombre de modèles retirés du catalogue (limité sans abonnement)
     nb_retraits = models.PositiveIntegerField(default=0)
 

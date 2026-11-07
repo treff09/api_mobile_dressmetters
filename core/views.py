@@ -263,7 +263,7 @@ class UserProfileTypeView(APIView):
     def get(self, request):
         user = request.user
         if hasattr(user, 'professional_profile'):
-            return Response({'type_de_compte': 'professionnel'}, status=status.HTTP_200_OK)
+            return Response({'type_de_compte': 'professionnel', 'devise': user.professional_profile.devise or 'XOF', 'devise_confirmee': user.professional_profile.devise_confirmee}, status=status.HTTP_200_OK)
         if hasattr(user, 'client_profile'):
             return Response({'type_de_compte': 'client', 'genre': user.client_profile.genre}, status=status.HTTP_200_OK)
         return Response({'type_de_compte': 'inconnu'}, status=status.HTTP_200_OK)

@@ -132,7 +132,14 @@ class ProfessionalProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProfessionalProfile
         fields = ['user', 'nom_entreprise', 'nom', 'prenom', 'numero_telephone',
-                  'ville', 'quartier', 'adresse', 'latitude', 'longitude', 'visible_sur_carte']
+                  'ville', 'quartier', 'adresse', 'latitude', 'longitude', 'visible_sur_carte', 'devise', 'devise_confirmee']
+        read_only_fields = ['devise_confirmee']
+
+    def update(self, instance, validated_data):
+        # Choisir sa devise (1re connexion ou profil) = question réglée
+        if 'devise' in validated_data:
+            instance.devise_confirmee = True
+        return super().update(instance, validated_data)
 
 class ClientProfileSerializer(serializers.ModelSerializer):
     user = UserSimpleSerializer(read_only=True)

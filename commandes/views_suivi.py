@@ -30,8 +30,9 @@ MESSAGES_ETAPE = {
 }
 
 
-def _f(montant):
-    return f"{int(montant):,} F".replace(',', ' ')
+def _f(montant, c=None):
+    from core.devise import format_montant
+    return format_montant(montant, getattr(getattr(c, 'professional_profile', None), 'devise', 'XOF'))
 
 
 def _commande_du_pro(request, pk):
@@ -72,6 +73,7 @@ def suivi_json(c):
         "type_paiement": c.type_paiement,
         "acompte_demande": c.acompte_demande,
         "moyen_paiement": c.moyen_paiement,
+        "devise": getattr(c.professional_profile, 'devise', None) or 'XOF',
     }
 
 
@@ -161,8 +163,8 @@ class PaiementsCommandeView(APIView):
                                             note=(request.data.get('note') or '')[:200])
             _recalculer_paiement(c)
             c.save(update_fields=['montant_paye', 'reste_a_payer', 'statut_paiement'])
-        msg = f"Paiement de {_f(montant)} reçu pour ta commande #{c.id}."
-        msg += f" Reste à payer : {_f(c.reste_a_payer)}." if c.reste_a_payer > 0 else " Tout est payé, merci !"
+        msg = f"Paiement de {_f(montant, c)} reçu pour ta commande #{c.id}."
+        msg += f" Reste à payer : {_f(c.reste_a_payer, c)}." if c.reste_a_payer > 0 else " Tout est payé, merci !"
         notifier(c.client_profile.user, "Paiement reçu", msg, c.id, 'PAIEMENT')
         return Response(suivi_json(c), status=201)
 
@@ -196,7 +198,7 @@ class RelancerPaiementView(APIView):
                                        created_at__gte=timezone.now() - timedelta(hours=20)).exists():
             return Response({"error": "Le client a déjà été relancé aujourd'hui."}, status=429)
         notifier(c.client_profile.user, "Rappel de paiement",
-                 f"Il reste {_f(c.reste_a_payer)} à payer pour ta commande #{c.id} chez {c.professional_profile.nom_entreprise}.",
+                 f"Il reste {_f(c.reste_a_payer, c)} à payer pour ta commande #{c.id} chez {c.professional_profile.nom_entreprise}.",
                  c.id, 'PAIEMENT')
         return Response({"message": "Client relancé."})
 
@@ -270,6 +272,7 @@ class TableauDeBordView(APIView):
             "a_encaisser": a_encaisser,
             "meilleurs_modeles": [{"nom": t['articles__modele_disponible__nom'], "commandes": t['n']} for t in top],
             "note_moyenne": moyenne, "nombre_avis": nombre,
+            "devise": pro.devise or 'XOF',
         })
 
 

@@ -423,8 +423,9 @@ class CommandeDefinirMontantView(APIView):
 
             # Notifie le client du montant fixé par le couturier
             try:
+                from core.devise import format_montant
                 client_user = commande.client_profile.user
-                msg = f"Le montant de votre commande #{commande.id} a été fixé à {commande.total_commande} FCFA."
+                msg = f"Le montant de votre commande #{commande.id} a été fixé à {format_montant(commande.total_commande, commande.professional_profile.devise)}."
                 Notification.objects.create(user=client_user, title="Montant de la commande", message=msg, commande_id=commande.id)
 
                 channel_layer = get_channel_layer()

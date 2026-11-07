@@ -61,10 +61,11 @@ class ModeleDisponibleDetailSerializer(serializers.ModelSerializer):
     image = serializers.SerializerMethodField()
     image_cote = serializers.SerializerMethodField()
     image_dos = serializers.SerializerMethodField()
+    devise = serializers.CharField(source='professional_profile.devise', read_only=True, default='XOF')
 
     class Meta:
         model = ModeleDisponible
-        fields = ['id', 'nom', 'description', 'price', 'acompte', 'image', 'image_cote', 'image_dos']
+        fields = ['id', 'nom', 'description', 'price', 'acompte', 'devise', 'image', 'image_cote', 'image_dos']
 
     def _url(self, f):
         if not f:
@@ -163,6 +164,7 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
     nom_entreprise = serializers.CharField(source='professional_profile.nom_entreprise', read_only=True)
     # Pour le bouton WhatsApp côté client
     telephone_couturier = serializers.CharField(source='professional_profile.numero_telephone', read_only=True, default='')
+    devise = serializers.CharField(source='professional_profile.devise', read_only=True, default='XOF')
     # Étapes de fabrication, essayage, paiements reçus, avis du client
     suivi = serializers.SerializerMethodField()
     avis = serializers.SerializerMethodField()
@@ -183,7 +185,7 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
             'date_creation', 'date_livraison', 'statut', 'articles',
             'total_commande', 'montant_paye', 'reste_a_payer', 'statut_paiement',
             'moyen_paiement', 'acompte_demande', 'type_paiement', 'telephone_couturier',
-            'etape', 'date_essayage', 'suivi', 'avis',
+            'etape', 'date_essayage', 'suivi', 'avis', 'devise',
         ]
 
 # ============================================================

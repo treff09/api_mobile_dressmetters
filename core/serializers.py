@@ -126,6 +126,7 @@ class ModeleDisponibleSerializer(serializers.ModelSerializer):
     mesures_requises_ids = serializers.CharField(write_only=True, required=False, allow_blank=True)
     # Écriture : "cote,dos" pour enlever ces photos lors d'une modification
     retirer_vues = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    devise = serializers.CharField(source='professional_profile.devise', read_only=True, default='XOF')
 
     def _retirer_vues(self, modele, brut):
         for vue in str(brut or '').replace(' ', '').split(','):
@@ -137,7 +138,7 @@ class ModeleDisponibleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ModeleDisponible
         fields = ['id', 'professional_profile', 'type_vetement', 'nom', 'description', 'image',
-                  'image_cote', 'image_dos', 'retirer_vues', 'price', 'acompte',
+                  'image_cote', 'image_dos', 'retirer_vues', 'price', 'acompte', 'devise',
                   'mesures_requises', 'mesures_requises_ids']
         read_only_fields = ['professional_profile']
 

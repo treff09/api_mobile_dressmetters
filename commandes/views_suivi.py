@@ -237,10 +237,15 @@ class AvisCouturierListView(APIView):
     def get(self, request, pro_id):
         pro = get_object_or_404(ProfessionalProfile, id=pro_id)
         moyenne, nombre = note_moyenne(pro)
-        avis = AvisCouturier.objects.filter(professional_profile=pro, visible=True).select_related('client_profile')[:30]
+        from core.models import ids_bloques
+        avis = (AvisCouturier.objects.filter(professional_profile=pro, visible=True)
+                .exclude(client_profile__user_id__in=ids_bloques(request.user))
+                .select_related('client_profile')[:30])
         return Response({
             "moyenne": moyenne, "nombre": nombre,
-            "avis": [{"note": a.note, "commentaire": a.commentaire, "date": a.date,
+            "couturier_user_id": pro.user_id,
+            "avis": [{"id": a.id, "note": a.note, "commentaire": a.commentaire, "date": a.date,
+                      "auteur_id": a.client_profile.user_id,
                       "client": (a.client_profile.prenom or 'Client').strip()} for a in avis],
         })
 

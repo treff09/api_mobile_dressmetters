@@ -1,3 +1,4 @@
+from core.views_moderation import SignalerView, BloquerView
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
@@ -50,6 +51,8 @@ urlpatterns = [
     path('type-vetements-list/', TypeVetementListAPIView.as_view(), name='type-vetement-list'),
     path('subscriptions/offers/', OffreAbonnementListView.as_view(), name='offres-abonnement'),
     path('app-status/', check_app_status, name='check_app_status'),
+    path('signaler/', SignalerView.as_view(), name='signaler'),
+    path('bloquer/', BloquerView.as_view(), name='bloquer'),
 
     path('privacy-policy/', privacy_policy_view, name='privacy_policy'),
     path('cgu/', cgu_view, name='cgu'),

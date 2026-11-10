@@ -62,8 +62,16 @@ def _note(pro):
     return note_moyenne(pro)
 
 
+def _bloques(user):
+    from core.models import ids_bloques
+    return ids_bloques(user)
+
+
 def catalogue_couturier(request, professional_profile):
     """Modèles visibles d'un couturier + mesures du client connecté (scan OU carte)."""
+    if professional_profile.user_id in _bloques(request.user):
+        from rest_framework.exceptions import PermissionDenied
+        raise PermissionDenied("Ce couturier n'est pas disponible.")
 
     # 3. Modèles EN LIGNE du couturier, limités s'il n'a pas (ou plus) d'abonnement actif
     from core.models import modeles_visibles
@@ -80,6 +88,7 @@ def catalogue_couturier(request, professional_profile):
     return {
         "couturier": {
             "id": professional_profile.id,
+            "user_id": professional_profile.user_id,  # pour « Signaler / Bloquer »
             "nom_entreprise": professional_profile.nom_entreprise,
             "nom": professional_profile.nom,
             "prenom": professional_profile.prenom,
@@ -247,6 +256,7 @@ class CouturiersCarteView(APIView):
         pros = (ProfessionalProfile.objects
                 .filter(user__is_active=True, visible_sur_carte=True,
                         latitude__isnull=False, longitude__isnull=False)
+                .exclude(user_id__in=_bloques(request.user))
                 .select_related('user'))
         resultats = []
         for pro in pros:

@@ -169,3 +169,20 @@ class EnvoiMessageAdmin(admin.ModelAdmin):
             return
         obj.envoyer()
         self.message_user(request, f"Message « {obj.titre} » envoyé.", _msg.SUCCESS)
+
+
+from core.models import Signalement, Blocage
+
+
+@admin.register(Signalement)
+class SignalementAdmin(admin.ModelAdmin):
+    """Signalements à traiter sous 24 h : masquer l'avis / retirer le modèle / désactiver le compte."""
+    list_display = ('date', 'type', 'objet_id', 'motif', 'auteur', 'traite')
+    list_filter = ('traite', 'type', 'motif')
+    list_editable = ('traite',)
+    search_fields = ('details', 'auteur__email')
+
+
+@admin.register(Blocage)
+class BlocageAdmin(admin.ModelAdmin):
+    list_display = ('date', 'auteur', 'bloque')

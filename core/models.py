@@ -844,3 +844,44 @@ class EnvoiMessage(models.Model):
                 res = diffuser_message(titre, message, cible, ids, ville)
                 EnvoiMessage.objects.filter(pk=pk).update(resultat=str(res)[:200])
         _tx.on_commit(_lancer)
+
+
+# ── MODÉRATION (exigence Apple 1.2 : signaler et bloquer) ─────────────────────
+
+class Signalement(models.Model):
+    """Contenu signalé par un utilisateur. À traiter sous 24 h dans l'admin."""
+    TYPES = [('avis', 'Avis'), ('modele', 'Modèle (photo)'), ('utilisateur', 'Utilisateur')]
+    MOTIFS = [('inapproprie', 'Contenu choquant ou inapproprié'), ('insulte', 'Insulte ou harcèlement'),
+              ('arnaque', 'Arnaque ou fausse information'), ('autre', 'Autre')]
+    auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='signalements_faits')
+    type = models.CharField(max_length=20, choices=TYPES)
+    objet_id = models.PositiveIntegerField(help_text="ID de l'avis, du modèle ou de l'utilisateur")
+    motif = models.CharField(max_length=20, choices=MOTIFS, default='autre')
+    details = models.TextField(blank=True, default='')
+    date = models.DateTimeField(auto_now_add=True)
+    traite = models.BooleanField(default=False, help_text="Coché une fois le signalement examiné")
+
+    class Meta:
+        ordering = ['traite', '-date']
+
+    def __str__(self):
+        return f"{self.get_type_display()} #{self.objet_id} — {self.get_motif_display()}"
+
+
+class Blocage(models.Model):
+    """« Bloquer » : les deux personnes ne se voient plus (avis, carte, catalogue)."""
+    auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='blocages_faits')
+    bloque = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='blocages_subis')
+    date = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('auteur', 'bloque')
+
+
+def ids_bloques(user):
+    """IDs des utilisateurs bloqués par `user` ou qui ont bloqué `user`."""
+    if not getattr(user, 'is_authenticated', False):
+        return set()
+    a = Blocage.objects.filter(auteur=user).values_list('bloque_id', flat=True)
+    b = Blocage.objects.filter(bloque=user).values_list('auteur_id', flat=True)
+    return set(a) | set(b)

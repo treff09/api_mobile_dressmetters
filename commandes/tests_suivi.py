@@ -72,9 +72,16 @@ class SuiviTests(TestCase):
         u2 = User.objects.create_user('pro2', 'p2@x.ci', 'x12345')
         filleul = ProfessionalProfile.objects.create(user=u2, nom_entreprise='Filleul', numero_telephone='0700000010', parrain=self.pro)
         from commandes.views_suivi import recompenser_parrain
+        Abonnement.objects.filter(professional_profile=self.pro).delete()
+        # Parrain NON abonné : pas de bonus
+        self.assertFalse(recompenser_parrain(filleul))
+        self.assertFalse(Abonnement.objects.filter(professional_profile=self.pro).exists())
+        # Parrain abonné : +30 jours sur SON abonnement, une seule fois
+        fin = timezone.now() + timedelta(days=10)
+        Abonnement.objects.create(professional_profile=self.pro, date_fin=fin)
         self.assertTrue(recompenser_parrain(filleul)); self.assertFalse(recompenser_parrain(filleul))
         abo = Abonnement.objects.get(professional_profile=self.pro)
-        self.assertGreater(abo.date_fin, timezone.now() + timedelta(days=29))
+        self.assertGreater(abo.date_fin, fin + timedelta(days=29))
         self.assertTrue(code)
 
 

@@ -65,6 +65,10 @@ class ClientProfile(models.Model):
     prenom = models.CharField(max_length=100, blank=True)
     numero_telephone = models.CharField(max_length=20, blank=True, null=True)
     genre = models.CharField(max_length=20, blank=True, null=True)
+    # Client enregistré par un couturier (il n'a pas encore l'application).
+    # Ses commandes et mesures rejoignent son vrai compte quand il ouvre
+    # son lien de suivi et s'inscrit (voir commandes/views_sans_appli.py).
+    invite = models.BooleanField(default=False)
     def save(self, *args, **kwargs):
         # Un même compte ne peut pas être client ET couturier
         if not self.pk and ProfessionalProfile.objects.filter(user_id=self.user_id).exists():
@@ -424,6 +428,21 @@ class Commande(models.Model):
     type_paiement = models.CharField(
         max_length=10, choices=TYPE_PAIEMENT_CHOICES, null=True, blank=True
     )
+
+    # Lien de suivi public (page web envoyée au client par WhatsApp)
+    lien_suivi = models.CharField(max_length=32, unique=True, null=True, blank=True)
+    # Commande saisie par le couturier pour un client sans l'application
+    creee_par_couturier = models.BooleanField(default=False)
+    # Description libre du vêtement (commande saisie par le couturier sans modèle du catalogue)
+    description = models.CharField(max_length=255, blank=True, default='')
+
+    def jeton_suivi(self):
+        """Crée (une seule fois) le jeton secret du lien de suivi."""
+        if not self.lien_suivi:
+            import secrets
+            self.lien_suivi = secrets.token_urlsafe(16)[:22]
+            Commande.objects.filter(pk=self.pk).update(lien_suivi=self.lien_suivi)
+        return self.lien_suivi
 
     def save(self, *args, **kwargs):
         # Calcul automatique du reste à payer avant sauvegarde

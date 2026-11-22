@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="60">
+<meta name="robots" content="noindex">
+<title>{% if trouve %}Suivi de commande · {{ atelier }}{% else %}Dress'Matter{% endif %}</title>
+<meta property="og:title" content="{% if trouve %}Suivez votre commande chez {{ atelier }}{% else %}Dress'Matter{% endif %}">
+<meta property="og:description" content="Voyez où en est votre tenue, étape par étape.">
+<style>
+  :root{--fond:#0F1B33;--carte:#17284A;--or:#D4AF37;--texte:#F8F5F0;--doux:#C9C2B5;--trait:#2C3F66;--vert:#5CC28A}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--texte);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:20px 14px 40px}
+  main{max-width:440px;margin:0 auto}
+  .logo{font-family:Georgia,serif;font-size:26px;font-weight:700;text-align:center;margin:4px 0 18px}
+  .logo span{color:var(--or)}
+  .carte{background:var(--carte);border-radius:20px;padding:22px 20px;margin-bottom:14px}
+  h1{font-size:20px;margin:0 0 4px}
+  h2{font-size:16px;margin:0 0 14px}
+  p{color:var(--doux);line-height:1.5;margin:0 0 10px;font-size:15px}
+  .photo{width:100%;max-height:260px;object-fit:cover;border-radius:14px;margin-bottom:14px}
+  .badge{display:inline-block;background:var(--or);color:var(--fond);font-weight:700;border-radius:999px;padding:6px 14px;font-size:14px;margin:6px 0 4px}
+  ol{list-style:none;margin:0;padding:0}
+  li{display:flex;align-items:center;gap:12px;padding:9px 0;color:var(--doux);font-size:15px;position:relative}
+  .pt{width:26px;height:26px;border-radius:50%;border:2px solid var(--trait);flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+  li.faite{color:var(--texte)} li.faite .pt{background:var(--vert);border-color:var(--vert);color:var(--fond)}
+  li.actuelle{color:var(--texte);font-weight:700} li.actuelle .pt{border-color:var(--or);background:var(--or);color:var(--fond)}
+  .ligne{display:flex;justify-content:space-between;padding:6px 0;font-size:15px}
+  .ligne b{color:var(--texte)}
+  .btn{display:block;width:100%;padding:15px;border-radius:14px;font-weight:700;font-size:16px;text-decoration:none;text-align:center;margin-top:10px;min-height:48px}
+  .or{background:var(--or);color:var(--fond)}
+  .contour{border:1.5px solid var(--doux);color:var(--texte)}
+  ul.avantages{margin:0 0 6px;padding-left:20px;color:var(--doux);line-height:1.7;font-size:15px}
+  .petit{font-size:13px;text-align:center;margin-top:12px}
+  .cache{display:none}
+</style>
+</head>
+<body>
+<main>
+  <p class="logo">Dress'<span>Matter</span></p>
+{% if trouve %}
+  <section class="carte">
+    {% if image %}<img class="photo" src="{{ image }}" alt="{{ vetement }}">{% endif %}
+    <h1>{% if prenom %}Bonjour {{ prenom }} 👋{% else %}Votre commande{% endif %}</h1>
+    <p>{{ vetement }} · chez <b style="color:var(--texte)">{{ atelier }}</b> · n° {{ numero }}</p>
+    <span class="badge">{{ etape_libelle }}</span>
+    {% if date_livraison %}<p style="margin-top:8px">Date prévue : <b style="color:var(--texte)">{{ date_livraison|date:"d/m/Y" }}</b></p>{% endif %}
+    {% if date_essayage %}<p>Essayage : <b style="color:var(--texte)">{{ date_essayage|date:"d/m/Y à H:i" }}</b></p>{% endif %}
+  </section>
+
+  <section class="carte">
+    <h2>Avancement</h2>
+    <ol>
+      {% for e in etapes %}
+      <li class="{% if e.faite %}faite{% elif e.actuelle %}actuelle{% endif %}">
+        <span class="pt">{% if e.faite %}✓{% else %}{{ forloop.counter }}{% endif %}</span>{{ e.libelle }}
+      </li>
+      {% endfor %}
+    </ol>
+  </section>
+
+  {% if a_un_montant %}
+  <section class="carte">
+    <h2>Paiement</h2>
+    <div class="ligne"><span>Total</span><b>{{ total }}</b></div>
+    <div class="ligne"><span>Déjà payé</span><b>{{ paye }}</b></div>
+    <div class="ligne"><span>Reste à payer</span><b>{{ reste }}</b></div>
+  </section>
+  {% endif %}
+
+  <section class="carte">
+    <h2>Retrouvez tout dans l'application</h2>
+    <ul class="avantages">
+      <li>Vos mesures déjà prises par votre couturier</li>
+      <li>Toutes vos commandes au même endroit</li>
+      <li>Une notification à chaque étape</li>
+    </ul>
+    <div id="android" class="cache">
+      <a class="btn or" href="{{ intent_android }}">Ouvrir dans l'application</a>
+      <a class="btn contour" href="{{ play_store }}">Télécharger sur Google Play</a>
+    </div>
+    <div id="ios" class="cache">
+      {% if app_store %}
+        <a class="btn or" href="{{ lien_appli }}">Ouvrir dans l'application</a>
+        <a class="btn contour" href="{{ app_store }}">Télécharger sur l'App Store</a>
+      {% else %}
+        <p><b>Bientôt disponible sur iPhone.</b></p>
+      {% endif %}
+    </div>
+    <div id="ordi" class="cache">
+      <a class="btn contour" href="{{ play_store }}">Voir sur Google Play</a>
+    </div>
+    <p class="petit">Après votre inscription, touchez à nouveau ce lien : vos commandes et vos mesures seront ajoutées à votre compte.</p>
+  </section>
+  {% if tel_atelier %}<a class="btn contour" href="tel:{{ tel_atelier }}">Appeler {{ atelier }}</a>{% endif %}
+  <p class="petit">Cette page se met à jour toute seule.</p>
+{% else %}
+  <section class="carte">
+    <h1>Lien introuvable</h1>
+    <p>Ce lien de suivi n'existe pas. Demandez à votre couturier de vous le renvoyer.</p>
+  </section>
+{% endif %}
+</main>
+<script>
+  (function () {
+    var ua = navigator.userAgent || "";
+    var a = /android/i.test(ua);
+    var i = /iphone|ipad|ipod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    var el = document.getElementById(a ? "android" : (i ? "ios" : "ordi"));
+    if (el) el.classList.remove("cache");
+  })();
+</script>
+</body>
+</html>

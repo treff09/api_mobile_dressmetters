@@ -325,8 +325,11 @@ class ParrainageView(APIView):
             return Response(status=403)
         code = code_parrainage(pro)
         filleuls = pro.filleuls.all()
+        abo = getattr(pro, 'abonnement', None)
         return Response({
             "code": code,
+            # Le bonus n'est gagné que si le parrain est lui-même abonné (il prolonge son abonnement)
+            "abonne": bool(abo and abo.est_actif),
             "invites": filleuls.count(),
             "mois_gagnes": filleuls.filter(parrainage_recompense=True).count(),
             "message": (f"Rejoins-moi sur Dress'Matter, l'appli des couturiers ! "
@@ -337,21 +340,37 @@ class ParrainageView(APIView):
 
 def recompenser_parrain(filleul):
     """
-    Appelé APRÈS un premier abonnement payé par le filleul : le parrain gagne 30 jours de Premium.
-    N'affecte jamais le paiement du filleul (simple bonus ajouté ensuite).
+    Appelé APRÈS un abonnement payé par le filleul (n'affecte jamais son paiement).
+    Règle : seul le PREMIER abonnement du filleul compte, et le parrain doit être
+    lui-même abonné (Premium actif) à ce moment-là : ses 30 jours PROLONGENT son abonnement.
+    Parrain non abonné → pas de bonus (il est prévenu), et les abonnements suivants
+    du filleul ne rapportent rien non plus.
     """
     from core.models import Abonnement
     if not filleul.parrain_id or filleul.parrainage_recompense:
+        return False
+    # Seul le premier abonnement payé du filleul compte
+    try:
+        from rechargements.models import PaiementChariow
+        if PaiementChariow.objects.filter(professional_profile_id=filleul.id, statut="PAYE").count() > 1:
+            return False
+    except Exception:  # noqa: BLE001
+        pass
+    now = timezone.now()
+    abo_parrain = Abonnement.objects.filter(professional_profile_id=filleul.parrain_id).first()
+    if not (abo_parrain and abo_parrain.date_fin and abo_parrain.date_fin > now):
+        notifier(filleul.parrain.user, "Ton filleul s'est abonné 🎉",
+                 f"{filleul.nom_entreprise} s'est abonné grâce à ton code. Abonne-toi au Premium "
+                 f"pour gagner 1 mois offert à chaque prochain filleul !")
         return False
     with transaction.atomic():
         f = ProfessionalProfile.objects.select_for_update().get(id=filleul.id)
         if f.parrainage_recompense:
             return False
-        now = timezone.now()
-        abo, _ = Abonnement.objects.select_for_update().get_or_create(
-            professional_profile_id=f.parrain_id, defaults={"date_fin": now})
-        depart = abo.date_fin if (abo.date_fin and abo.date_fin > now) else now
-        abo.date_fin = depart + timedelta(days=30)
+        abo = Abonnement.objects.select_for_update().get(professional_profile_id=f.parrain_id)
+        if not (abo.date_fin and abo.date_fin > now):
+            return False
+        abo.date_fin = abo.date_fin + timedelta(days=30)
         abo.save(update_fields=['date_fin'])
         f.parrainage_recompense = True
         f.save(update_fields=['parrainage_recompense'])

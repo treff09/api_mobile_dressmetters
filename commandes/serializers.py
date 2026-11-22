@@ -47,14 +47,21 @@ class MesureClientSerializer(serializers.ModelSerializer):
 
 class ClientProfileMinimalSerializer(serializers.ModelSerializer):
     """Affiche les informations du client avec ses mesures actuelles."""
-    username = serializers.CharField(source='user.username', read_only=True)
+    username = serializers.SerializerMethodField()
+    # Client enregistré par le couturier (n'a pas encore l'application)
+    sans_appli = serializers.BooleanField(source='invite', read_only=True)
+
+    def get_username(self, obj):
+        if obj.invite:
+            return f"{obj.prenom} {obj.nom}".strip() or obj.numero_telephone or "Client"
+        return obj.user.username
     
     # Utilise le related_name='mesures_dynamiques' défini dans ton modèle MesureClient
     mesures_client = MesureClientSerializer(many=True, source='mesures_dynamiques', read_only=True)
 
     class Meta:
         model = ClientProfile
-        fields = ['nom', 'prenom', 'username', 'numero_telephone', 'mesures_client']
+        fields = ['nom', 'prenom', 'username', 'numero_telephone', 'mesures_client', 'sans_appli']
 
 class ModeleDisponibleDetailSerializer(serializers.ModelSerializer):
     """Affiche les détails du modèle avec URL d'image complète pour Flutter."""
@@ -186,6 +193,7 @@ class CommandeDetailSerializer(serializers.ModelSerializer):
             'total_commande', 'montant_paye', 'reste_a_payer', 'statut_paiement',
             'moyen_paiement', 'acompte_demande', 'type_paiement', 'telephone_couturier',
             'etape', 'date_essayage', 'suivi', 'avis', 'devise',
+            'creee_par_couturier', 'description',
         ]
 
 # ============================================================

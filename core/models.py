@@ -40,6 +40,8 @@ class ProfessionalProfile(models.Model):
     # Parrainage : « Invite un couturier, gagne 1 mois Premium »
     code_parrainage = models.CharField(max_length=12, unique=True, null=True, blank=True)
     parrain = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='filleuls')
+    # Mois offert à l'ouverture du compte déjà reçu (une seule fois)
+    offre_ouverture_recue = models.BooleanField(default=False)
     parrainage_recompense = models.BooleanField(default=False, help_text="Le parrain a déjà reçu son mois offert pour ce filleul")
     # Devise des prix de l'atelier (modèles, commandes, paiements reçus). N'affecte pas l'abonnement.
     devise = models.CharField(max_length=3, choices=DEVISES, default='XOF')
@@ -594,6 +596,27 @@ class AppConfiguration(models.Model):
         help_text="Nombre de NOUVELLES commandes qu'un couturier SANS abonnement Premium peut recevoir "
                   "par mois (remis à zéro le 1er du mois). Avec Premium, c'est illimité.",
     )
+
+    # ── Offre d'ouverture : Premium offert aux nouveaux couturiers ──
+    offre_ouverture_active = models.BooleanField(
+        default=True, verbose_name="Offre d'ouverture active",
+        help_text="Les couturiers qui créent leur compte entre les deux dates reçoivent le Premium offert.")
+    offre_ouverture_debut = models.DateField(
+        default=datetime.date(2026, 11, 1), verbose_name="Comptes créés à partir du")
+    offre_ouverture_fin = models.DateField(
+        default=datetime.date(2026, 12, 31), verbose_name="Jusqu'au (inclus)")
+    offre_ouverture_jours = models.PositiveIntegerField(
+        default=30, verbose_name="Nombre de jours offerts")
+
+    @classmethod
+    def offre_ouverture(cls):
+        """(début, fin, jours) de l'offre d'ouverture, ou None si elle est désactivée."""
+        c = cls.objects.first()
+        if c is None:
+            return (datetime.date(2026, 11, 1), datetime.date(2026, 12, 31), 30)
+        if not c.offre_ouverture_active or not c.offre_ouverture_jours:
+            return None
+        return (c.offre_ouverture_debut, c.offre_ouverture_fin, c.offre_ouverture_jours)
 
     @classmethod
     def limite_commandes_mensuelles(cls):

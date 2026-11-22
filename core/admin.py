@@ -31,6 +31,12 @@ class AppConfigurationAdmin(admin.ModelAdmin):
     list_editable = ('is_maintenance_mode', 'nb_modeles_gratuits', 'nb_retraits_gratuits', 'nb_commandes_mensuelles_gratuites', 'send_to_all_now')  # modifiable directement dans la liste
     fieldsets = (
         ("Couturiers sans abonnement", {"fields": ("nb_modeles_gratuits", "nb_retraits_gratuits", "nb_commandes_mensuelles_gratuites")}),
+        ("Offre d'ouverture : Premium offert aux nouveaux couturiers", {
+            "fields": ("offre_ouverture_active", "offre_ouverture_debut", "offre_ouverture_fin", "offre_ouverture_jours"),
+            "description": "Chaque couturier qui crée son compte entre ces deux dates reçoit automatiquement ces jours "
+                           "de Premium, une seule fois. Pour les comptes créés avant la mise en ligne : "
+                           "python manage.py offre_ouverture",
+        }),
         ("Comptes supprimés", {"fields": ("delai_recuperation_jours",)}),
         ("Maintenance", {"fields": ("is_maintenance_mode", "maintenance_message")}),
         ("Message à tous les utilisateurs", {

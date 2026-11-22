@@ -7,3 +7,4 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from core import signals_push  # noqa: F401  (notifications → téléphone)
+        from core import signals_offre  # noqa: F401  (offre d'ouverture : Premium offert)

@@ -344,7 +344,7 @@ def page_suivi(request, token):
             "reste": _f(c.reste_a_payer, c),
             "a_un_montant": (c.total_commande or 0) > 0,
             "date_essayage": c.date_essayage,
-            "livree": c.etape == 'LIVREE',
+            "livree": est_livree(c),
         })
     return render(request, 'suivi/page_suivi.html', contexte, status=200 if c else 404)
 
@@ -418,6 +418,11 @@ class RecupererCommandesView(APIView):
 
 
 # ------------------------------------------------ 6. facture après livraison
+def est_livree(c):
+    """Livrée : étape « Livrée », ou anciennes commandes marquées « Terminées » avant les étapes."""
+    return c.etape == 'LIVREE' or (c.statut or '').strip().lower().startswith('termin')
+
+
 def url_facture(request, commande):
     return f"{_base_site(request)}/s/{commande.jeton_suivi()}/facture/"
 
@@ -434,7 +439,7 @@ class FactureCommandeView(APIView):
         c = Commande.objects.select_related('client_profile__user', 'professional_profile__user').filter(pk=pk).first()
         if c is None or request.user.id not in (c.client_profile.user_id, c.professional_profile.user_id):
             return Response({"error": "Commande introuvable."}, status=404)
-        if c.etape != 'LIVREE':
+        if not est_livree(c):
             return Response({"error": "La facture est disponible une fois la commande livrée.",
                              "code": "PAS_LIVREE"}, status=400)
         lien = url_facture(request, c)
@@ -453,7 +458,7 @@ def page_facture(request, token):
          .prefetch_related('articles__modele_disponible', 'paiements').filter(lien_suivi=token).first())
     if c is None:
         return render(request, 'suivi/page_suivi.html', {"trouve": False}, status=404)
-    if c.etape != 'LIVREE':
+    if not est_livree(c):
         # Pas encore livrée : on montre le suivi à la place
         from django.shortcuts import redirect
         return redirect('suivi-public', token=token)
@@ -472,7 +477,7 @@ def page_facture(request, token):
     moyens = dict(Commande.MOYEN_PAIEMENT_CHOICES)
     return render(request, 'suivi/facture.html', {
         "numero": numero_facture(c),
-        "date": c.etape_maj_le or c.date_creation,
+        "date": c.etape_maj_le or c.date_livraison or c.date_creation,
         "atelier": _nom_atelier(pro),
         "tel_atelier": pro.numero_telephone,
         "adresse_atelier": ", ".join(x for x in (pro.adresse, pro.quartier, pro.ville) if x),

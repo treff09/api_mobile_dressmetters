@@ -89,6 +89,13 @@ class SansAppliTests(TestCase):
         autre = User.objects.create_user('x2', 'x2@x.com', 'x'); a = APIClient(); a.force_authenticate(autre)
         self.assertEqual(a.get(f'/api/v1/commandes/{c.id}/facture/').status_code, 404)
 
+    def test_facture_ancienne_commande(self):
+        # Ancienne commande terminée avant l'existence des étapes, sans lien de suivi
+        r = self.creer(); Commande.objects.filter(pk=r.data['id']).update(statut='Terminées', etape='RECUE', lien_suivi=None)
+        f = self.api.get(f"/api/v1/commandes/{r.data['id']}/facture/")
+        self.assertEqual(f.status_code, 200)
+        self.assertEqual(self.client.get(f.data['lien_facture'].split('testserver')[-1]).status_code, 200)
+
     def test_refus(self):
         self.assertEqual(self.creer(tel="12").status_code, 400)
         self.assertEqual(self.creer(modele_disponible="").status_code, 400)   # ni type ni modèle

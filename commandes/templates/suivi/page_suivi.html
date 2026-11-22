@@ -43,7 +43,7 @@
   <section class="carte">
     {% if image %}<img class="photo" src="{{ image }}" alt="{{ vetement }}">{% endif %}
     <h1>{% if prenom %}Bonjour {{ prenom }} 👋{% else %}Votre commande{% endif %}</h1>
-    <p>{{ vetement }} · chez <b style="color:var(--texte)">{{ atelier }}</b> · n° {{ numero }}</p>
+    <p>{{ vetement }}{% if pour %} pour <b style="color:var(--texte)">{{ pour }}</b>{% endif %} · chez <b style="color:var(--texte)">{{ atelier }}</b> · n° {{ numero }}</p>
     <span class="badge">{{ etape_libelle }}</span>
     {% if date_livraison %}<p style="margin-top:8px">Date prévue : <b style="color:var(--texte)">{{ date_livraison|date:"d/m/Y" }}</b></p>{% endif %}
     {% if date_essayage %}<p>Essayage : <b style="color:var(--texte)">{{ date_essayage|date:"d/m/Y à H:i" }}</b></p>{% endif %}
@@ -60,6 +60,7 @@
     </ol>
   </section>
 
+  {% if livree %}<a class="btn or" href="/s/{{ token }}/facture/" style="margin:0 0 14px">Voir ma facture</a>{% endif %}
   {% if a_un_montant %}
   <section class="carte">
     <h2>Paiement</h2>
@@ -72,7 +73,7 @@
   <section class="carte">
     <h2>Retrouvez tout dans l'application</h2>
     <ul class="avantages">
-      <li>Vos mesures déjà prises par votre couturier</li>
+      <li>Les mesures déjà prises par votre couturier{% if pour %}, rangées sur la fiche de {{ pour }}{% endif %}</li>
       <li>Toutes vos commandes au même endroit</li>
       <li>Une notification à chaque étape</li>
     </ul>

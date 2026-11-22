@@ -14,13 +14,14 @@ from .views_suivi import (EtapeCommandeView, EssayageCommandeView, PaiementsComm
                           RelancerPaiementView, AvisCommandeView, AvisCouturierListView, TableauDeBordView,
                           AppareilPushView, ParrainageView)
 
-from .views_sans_appli import (ClientsSansAppliView, CommandeSansAppliView, LienSuiviView,
+from .views_sans_appli import (ClientsSansAppliView, CommandeSansAppliView, FactureCommandeView, LienSuiviView,
                                RecupererCommandesView)
 
 urlpatterns = [
     path('sans-appli/', CommandeSansAppliView.as_view(), name='commande-sans-appli'),
     path('sans-appli/clients/', ClientsSansAppliView.as_view(), name='clients-sans-appli'),
     path('<int:pk>/lien-suivi/', LienSuiviView.as_view(), name='commande-lien-suivi'),
+    path('<int:pk>/facture/', FactureCommandeView.as_view(), name='commande-facture'),
     path('recuperer/', RecupererCommandesView.as_view(), name='recuperer-commandes'),
     # Suivi : étapes, essayage, paiements, avis, tableau de bord, push, parrainage
     path('<int:pk>/etape/', EtapeCommandeView.as_view(), name='commande-etape'),

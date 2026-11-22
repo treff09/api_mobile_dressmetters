@@ -12,9 +12,13 @@ class SansAppliTests(TestCase):
         self.pro_user = User.objects.create_user('pro', 'pro@x.com', 'x')
         self.pro = ProfessionalProfile.objects.create(user=self.pro_user, nom_entreprise="Atelier Awa", numero_telephone="0700000001")
         self.api = APIClient(); self.api.force_authenticate(self.pro_user)
+        from core.models import ModeleDisponible, TypeVetement
+        self.type = TypeVetement.objects.create(nom="Boubou")
+        self.modele = ModeleDisponible.objects.create(professional_profile=self.pro, type_vetement=self.type,
+                                                      nom="Boubou bazin", price=25000, acompte=10000)
 
     def creer(self, tel="+225 07 11 22 33 44", **extra):
-        d = {"prenom": "Koffi", "nom": "Yao", "telephone": tel, "description": "Boubou bazin",
+        d = {"prenom": "Koffi", "nom": "Yao", "telephone": tel, "description": "Boubou bazin", "modele_disponible": self.modele.id,
              "total": "25000", "acompte": "10000", "date_livraison": "2026-12-20",
              "mesures": [{"nom": "Tour de taille", "valeur": 82}, {"nom": "Longueur", "valeur": "110,5"}]}
         d.update(extra)
@@ -49,9 +53,46 @@ class SansAppliTests(TestCase):
         # Liste pro : nom lisible, pas « invite_… »
         lst = self.api.get(f'/api/v1/commandes/{c.id}/lien-suivi/'); self.assertEqual(lst.status_code, 200)
 
+    def test_commande_pour_un_enfant(self):
+        # Le parent a déjà l'appli et ses propres mesures (« Moi »)
+        from core.models import LibelleMesure
+        cu = User.objects.create_user('maman', 'm@x.com', 'x'); vrai = ClientProfile.objects.create(user=cu, prenom="Awa")
+        lib = LibelleMesure.objects.create(nom="Tour de taille")
+        MesureClient.objects.create(client_profile=vrai, personne=PersonneMesuree.moi(vrai), libelle=lib, valeur=70)
+        r = self.creer(prenom="Awa", pour="Junior", genre="H", mesures=[{"nom": "Tour de taille", "valeur": 55}])
+        self.assertEqual(r.status_code, 201, r.data)
+        c = Commande.objects.get(pk=r.data['id'])
+        self.assertEqual(c.articles.first().personne_nom, "Junior")
+        self.assertContains(self.client.get(f'/s/{c.lien_suivi}/'), "Junior")
+        api_c = APIClient(); api_c.force_authenticate(cu)
+        self.assertEqual(api_c.post('/api/v1/commandes/recuperer/', {"lien": c.lien_suivi}, format='json').status_code, 200)
+        moi = PersonneMesuree.moi(vrai); junior = vrai.personnes.get(prenom="Junior")
+        self.assertEqual(MesureClient.objects.get(personne=moi, libelle=lib).valeur, 70)      # les siennes : intactes
+        self.assertEqual(MesureClient.objects.get(personne=junior, libelle__nom="Tour de taille").valeur, 55)   # celles du fils
+        self.assertEqual(junior.genre, 'H')
+        self.assertEqual(Commande.objects.get(pk=c.pk).articles.first().personne_id, junior.id)
+
+    def test_facture(self):
+        r = self.creer(); c = Commande.objects.get(pk=r.data['id'])
+        self.assertEqual(self.api.get(f'/api/v1/commandes/{c.id}/facture/').status_code, 400)  # pas livrée
+        self.assertEqual(self.client.get(f'/s/{c.lien_suivi}/facture/').status_code, 302)
+        from core.models import PaiementCommande
+        PaiementCommande.objects.create(commande=c, montant=25000, moyen='ESPECE')
+        Commande.objects.filter(pk=c.pk).update(etape='LIVREE', montant_paye=25000, reste_a_payer=0)
+        f = self.api.get(f'/api/v1/commandes/{c.id}/facture/')
+        self.assertEqual(f.status_code, 200); self.assertIn('/facture/', f.data['lien_facture'])
+        page = self.client.get(f'/s/{c.lien_suivi}/facture/')
+        self.assertEqual(page.status_code, 200)
+        self.assertContains(page, "Boubou bazin"); self.assertContains(page, "PAYÉE"); self.assertContains(page, "Atelier Awa")
+        self.assertContains(self.client.get(f'/s/{c.lien_suivi}/'), "Voir ma facture")
+        # Un autre utilisateur ne peut pas demander la facture
+        autre = User.objects.create_user('x2', 'x2@x.com', 'x'); a = APIClient(); a.force_authenticate(autre)
+        self.assertEqual(a.get(f'/api/v1/commandes/{c.id}/facture/').status_code, 404)
+
     def test_refus(self):
         self.assertEqual(self.creer(tel="12").status_code, 400)
-        self.assertEqual(self.creer(description="").status_code, 400)
+        self.assertEqual(self.creer(modele_disponible="").status_code, 400)   # ni type ni modèle
+        self.assertEqual(self.creer(modele_disponible="", type_vetement=self.type.id).status_code, 400)  # pas de photo
         cu = User.objects.create_user('c2', 'c2@x.com', 'x'); ClientProfile.objects.create(user=cu)
         a = APIClient(); a.force_authenticate(cu)
         self.assertEqual(a.post('/api/v1/commandes/sans-appli/', {}, format='json').status_code, 403)

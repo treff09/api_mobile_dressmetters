@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Facture {{ numero }} · {{ atelier }}</title>
+<meta property="og:title" content="Facture {{ numero }} · {{ atelier }}">
+<meta property="og:description" content="Votre facture Dress'Matter">
+<style>
+  :root{--encre:#1B1F2E;--doux:#5B6275;--or:#B8862E;--trait:#E4E1DA;--fond:#F4F1EA;--vert:#17B26A}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fond);color:var(--encre);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:18px 12px 40px}
+  .feuille{max-width:620px;margin:0 auto;background:#fff;border-radius:16px;padding:28px 24px;box-shadow:0 4px 24px rgba(0,0,0,.06)}
+  .tete{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--trait);padding-bottom:18px}
+  .logo{font-family:Georgia,serif;font-size:22px;font-weight:700;margin:0}
+  .logo span{color:var(--or)}
+  h1{font-size:24px;margin:0;text-align:right}
+  .petit{color:var(--doux);font-size:13px;line-height:1.5;margin:2px 0}
+  .droite{text-align:right}
+  .bloc{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:18px 0}
+  .etiquette{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--doux);margin:0 0 4px}
+  b{font-weight:700}
+  table{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:15px}
+  th{text-align:left;font-size:12px;color:var(--doux);font-weight:600;border-bottom:1px solid var(--trait);padding:8px 0}
+  td{padding:10px 0;border-bottom:1px solid var(--trait);vertical-align:top}
+  td.m,th.m{text-align:right;white-space:nowrap;padding-left:12px}
+  .totaux{margin-left:auto;max-width:300px;margin-top:10px}
+  .totaux div{display:flex;justify-content:space-between;padding:5px 0;font-size:15px}
+  .totaux .grand{font-size:18px;font-weight:800;border-top:2px solid var(--encre);margin-top:4px;padding-top:8px}
+  .tampon{display:inline-block;border:2px solid var(--vert);color:var(--vert);font-weight:800;border-radius:8px;padding:4px 12px;transform:rotate(-4deg);margin-top:8px}
+  .reste{color:#C2410C;font-weight:800}
+  .merci{text-align:center;color:var(--doux);font-size:14px;margin-top:24px}
+  .actions{max-width:620px;margin:14px auto 0;display:flex;gap:10px}
+  .btn{flex:1;text-align:center;padding:14px;border-radius:12px;font-weight:700;text-decoration:none;font-size:15px;border:0;cursor:pointer;font-family:inherit}
+  .plein{background:var(--encre);color:#fff}
+  .contour{background:#fff;color:var(--encre);border:1.5px solid var(--trait)}
+  @media print{body{background:#fff;padding:0}.feuille{box-shadow:none;border-radius:0;max-width:none}.actions{display:none}}
+</style>
+</head>
+<body>
+<main class="feuille">
+  <div class="tete">
+    <div>
+      <p class="logo">{{ atelier }}</p>
+      {% if adresse_atelier %}<p class="petit">{{ adresse_atelier }}</p>{% endif %}
+      {% if tel_atelier %}<p class="petit">Tél. {{ tel_atelier }}</p>{% endif %}
+    </div>
+    <div class="droite">
+      <h1>Facture</h1>
+      <p class="petit">N° <b>{{ numero }}</b></p>
+      <p class="petit">Date : {{ date|date:"d/m/Y" }}</p>
+    </div>
+  </div>
+
+  <div class="bloc">
+    <div>
+      <p class="etiquette">Client</p>
+      <p style="margin:0"><b>{{ client }}</b></p>
+      {% if tel_client %}<p class="petit">{{ tel_client }}</p>{% endif %}
+    </div>
+    <div class="droite">
+      <p class="etiquette">Commande</p>
+      <p style="margin:0">n° {{ commande }}</p>
+      <p class="petit">du {{ date_commande|date:"d/m/Y" }} · livrée</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>Désignation</th><th class="m">Montant</th></tr></thead>
+    <tbody>
+      {% for l in lignes %}<tr><td>{{ l.nom }}</td><td class="m">{{ l.prix }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+
+  <div class="totaux">
+    <div class="grand"><span>Total</span><span>{{ total }}</span></div>
+    {% for p in paiements %}
+    <div class="petit" style="font-size:13px"><span>Payé le {{ p.date|date:"d/m/Y" }} · {{ p.moyen }}</span><span>{{ p.montant }}</span></div>
+    {% endfor %}
+    <div><span>Déjà payé</span><span>{{ paye }}</span></div>
+    {% if soldee %}
+      <div style="justify-content:flex-end"><span class="tampon">PAYÉE</span></div>
+    {% else %}
+      <div><span>Reste à payer</span><span class="reste">{{ reste }}</span></div>
+    {% endif %}
+  </div>
+
+  <p class="merci">Merci pour votre confiance 🙏<br><span style="font-size:12px">Facture établie avec Dress'Matter</span></p>
+</main>
+<div class="actions">
+  <button class="btn plein" onclick="window.print()">Télécharger en PDF</button>
+  <a class="btn contour" href="{{ lien_suivi }}">Voir le suivi</a>
+</div>
+</body>
+</html>

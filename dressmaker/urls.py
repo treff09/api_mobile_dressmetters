@@ -8,13 +8,14 @@ from rest_framework_simplejwt.views import (
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from commandes.views import landing_page_view
 from qr_code.views import ouvrir_lien_couturier, assetlinks
-from commandes.views_sans_appli import page_suivi
+from commandes.views_sans_appli import page_suivi, page_facture
 
 urlpatterns = [
     # Lien partagé par le couturier (WhatsApp…) + Android App Links
     path('c/<str:token>/', ouvrir_lien_couturier, name='lien-couturier'),
     # Suivi de commande public (lien envoyé au client par WhatsApp)
     path('s/<str:token>/', page_suivi, name='suivi-public'),
+    path('s/<str:token>/facture/', page_facture, name='facture-public'),
     path('.well-known/assetlinks.json', assetlinks, name='assetlinks'),
     # Site vitrine (page d'accueil publique)
     path('', landing_page_view, name='landing'),

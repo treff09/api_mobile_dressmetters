@@ -106,12 +106,18 @@ class ClientsSansAppliView(APIView):
                 clients.filter(numero_telephone__icontains=q)
         resultat = []
         for cp in clients.order_by('-id')[:50]:
-            moi = cp.personnes.filter(est_moi=True).first()
-            mesures = MesureClient.objects.filter(client_profile=cp, personne=moi).select_related('libelle') if moi else []
+            personnes = []
+            for p in cp.personnes.all():
+                mesures = MesureClient.objects.filter(client_profile=cp, personne=p).select_related('libelle')
+                personnes.append({
+                    "prenom": '' if p.est_moi else p.prenom, "est_moi": p.est_moi, "genre": p.genre,
+                    "mesures": [{"libelle": m.libelle_id, "nom": m.libelle.nom, "valeur": m.valeur} for m in mesures],
+                })
             resultat.append({
                 "id": cp.id, "nom": cp.nom, "prenom": cp.prenom,
                 "telephone": cp.numero_telephone, "genre": cp.genre,
-                "mesures": [{"libelle": m.libelle_id, "nom": m.libelle.nom, "valeur": m.valeur} for m in mesures],
+                # Le client lui-même (« Moi ») et ses proches (enfants…)
+                "personnes": personnes,
             })
         return Response(resultat)
 
@@ -120,8 +126,12 @@ class ClientsSansAppliView(APIView):
 class CommandeSansAppliView(APIView):
     """
     POST (couturier) — champs :
-      prenom, nom, telephone (obligatoire), genre (H/F)
-      modele_disponible (id, facultatif) ou description (texte)
+      prenom, nom, telephone (obligatoire)
+      pour (facultatif) : prénom de la personne habillée si ce n'est pas le client
+            lui-même (ex : son fils « Junior ») ; genre (H/F) = celui de cette personne
+      type_vetement (id) : obligatoire sans modèle du catalogue
+      modele_disponible (id) OU image_personnalisee (photo du modèle) : l'un des deux est obligatoire
+      description (facultative), image_tissu (photo du tissu, facultative : ajoutable plus tard)
       total, acompte (facultatifs ; par défaut ceux du modèle)
       date_livraison (AAAA-MM-JJ), image_personnalisee (photo, facultative)
       mesures : liste [{libelle: id} ou {nom: "Tour de taille"}, valeur: 80]
@@ -152,15 +162,26 @@ class CommandeSansAppliView(APIView):
             if modele is None:
                 return Response({"error": "Modèle introuvable."}, status=400)
         description = (d.get('description') or '').strip()[:255]
-        if modele is None and not description:
-            return Response({"error": "Choisissez un modèle ou décrivez le vêtement."}, status=400)
+        type_vetement = modele.type_vetement if modele else None
+        if type_vetement is None and d.get('type_vetement') not in (None, '', '0', 'null'):
+            from django.db.models import Q
+            from core.models import TypeVetement
+            type_vetement = TypeVetement.objects.filter(
+                Q(professional_profile__isnull=True) | Q(professional_profile=pro), pk=d.get('type_vetement')).first()
+        if type_vetement is None:
+            return Response({"error": "Choisissez le type de vêtement."}, status=400)
+        if modele is None and not d.get('image_personnalisee'):
+            return Response({"error": "Ajoutez le modèle : choisissez-le dans votre catalogue ou prenez-le en photo."}, status=400)
 
         total = _decimal(d.get('total'), Decimal(str(modele.price)) if modele else Decimal('0'))
         acompte = _decimal(d.get('acompte'), Decimal(str(modele.acompte or 0)) if modele else Decimal('0'))
         if total is None or acompte is None or total < 0 or acompte < 0:
             return Response({"error": "Montant invalide."}, status=400)
 
-        date_livraison = None
+        # Sans date précise : livraison prévue dans 14 jours (modifiable ensuite)
+        from datetime import timedelta
+        from django.utils import timezone as tz
+        date_livraison = tz.now() + timedelta(days=14)
         if d.get('date_livraison'):
             date_livraison = parse_datetime(str(d.get('date_livraison')))
             if date_livraison is None:
@@ -184,8 +205,17 @@ class CommandeSansAppliView(APIView):
                              "code": "LIMITE_COMMANDES"}, status=403)
 
         with transaction.atomic():
-            client = self._client_invite(cle, telephone, prenom, nom, d.get('genre'))
-            moi = PersonneMesuree.moi(client)
+            pour = (d.get('pour') or '').strip()[:60]
+            client = self._client_invite(cle, telephone, prenom, nom, None if pour else d.get('genre'))
+            if pour and pour.lower() != 'moi':
+                # Commande pour un proche (enfant…) : ses mesures restent les siennes
+                g = str(d.get('genre') or '').strip().upper()[:1]
+                moi = client.personnes.filter(prenom__iexact=pour, est_moi=False).first() or \
+                    PersonneMesuree.objects.create(client_profile=client, prenom=pour,
+                                                   genre='H' if g == 'H' else 'F', est_moi=False)
+            else:
+                pour = ''
+                moi = PersonneMesuree.moi(client)
 
             # Mesures prises à l'atelier : enregistrées sur la fiche du client
             figees = []
@@ -212,13 +242,14 @@ class CommandeSansAppliView(APIView):
                 total_commande=total, montant_paye=Decimal('0'), acompte_demande=acompte,
                 statut_paiement='EN_ATTENTE', statut='En attente',
                 date_livraison=date_livraison, creee_par_couturier=True,
-                description=description or (modele.nom if modele else ''),
+                description=description or (modele.nom if modele else type_vetement.nom),
             )
             article = ModeleCommande.objects.create(
                 commande=commande, modele_disponible=modele,
-                image_personnalisee=d.get('image_personnalisee') or None,
-                type_vetement=modele.type_vetement if modele else None,
-                personne=moi, personne_nom='',
+                image_personnalisee=None if modele else d.get('image_personnalisee'),
+                image_tissu=d.get('image_tissu') or None,
+                type_vetement=type_vetement,
+                personne=moi, personne_nom=pour,
                 prix_unitaire_snapshot=total,
             )
             ValeurMesureCommande.objects.bulk_create([
@@ -250,7 +281,7 @@ class CommandeSansAppliView(APIView):
         user.save()
         g = str(genre or '').strip().upper()[:1]
         return ClientProfile.objects.create(user=user, prenom=prenom, nom=nom, numero_telephone=telephone,
-                                            genre='Homme' if g == 'H' else 'Femme', invite=True)
+                                            genre={'H': 'Homme', 'F': 'Femme'}.get(g), invite=True)
 
 
 # ------------------------------------------- 3. lien de suivi (couturier)
@@ -300,6 +331,7 @@ def page_suivi(request, token):
             "atelier": _nom_atelier(pro),
             "tel_atelier": pro.numero_telephone,
             "prenom": c.client_profile.prenom,
+            "pour": art.personne_nom if art else '',
             "vetement": c.description or (art.modele_disponible.nom if art and art.modele_disponible else "Votre tenue"),
             "image": image,
             "numero": c.id,
@@ -312,6 +344,7 @@ def page_suivi(request, token):
             "reste": _f(c.reste_a_payer, c),
             "a_un_montant": (c.total_commande or 0) > 0,
             "date_essayage": c.date_essayage,
+            "livree": c.etape == 'LIVREE',
         })
     return render(request, 'suivi/page_suivi.html', contexte, status=200 if c else 404)
 
@@ -323,7 +356,7 @@ def fusionner_client(invite, vrai):
         if p.est_moi:
             cible = PersonneMesuree.moi(vrai)
         else:
-            cible = vrai.personnes.filter(prenom=p.prenom).first()
+            cible = vrai.personnes.filter(prenom__iexact=p.prenom.strip(), est_moi=False).first()
             if cible is None:
                 p.client_profile = vrai
                 p.save(update_fields=['client_profile'])
@@ -382,3 +415,77 @@ class RecupererCommandesView(APIView):
                 fusionner_client(fiche, vrai)
         return Response({"message": f"{nb} commande(s) et vos mesures ont été ajoutées à votre compte.",
                          "commandes": nb})
+
+
+# ------------------------------------------------ 6. facture après livraison
+def url_facture(request, commande):
+    return f"{_base_site(request)}/s/{commande.jeton_suivi()}/facture/"
+
+
+def numero_facture(c):
+    return f"DM-{(c.date_creation or c.etape_maj_le).year}-{c.id:05d}"
+
+
+class FactureCommandeView(APIView):
+    """GET : lien de la facture (couturier ou client de la commande) + message WhatsApp."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        c = Commande.objects.select_related('client_profile__user', 'professional_profile__user').filter(pk=pk).first()
+        if c is None or request.user.id not in (c.client_profile.user_id, c.professional_profile.user_id):
+            return Response({"error": "Commande introuvable."}, status=404)
+        if c.etape != 'LIVREE':
+            return Response({"error": "La facture est disponible une fois la commande livrée.",
+                             "code": "PAS_LIVREE"}, status=400)
+        lien = url_facture(request, c)
+        cp = c.client_profile
+        message = (f"Bonjour{(' ' + cp.prenom.strip()) if (cp.prenom or '').strip() else ''} 👋\n"
+                   f"Merci pour votre confiance ! Voici la facture de votre commande n° {c.id} "
+                   f"chez {_nom_atelier(c.professional_profile)} :\n{lien}")
+        return Response({"lien_facture": lien, "numero": numero_facture(c), "message_whatsapp": message,
+                         "telephone": cp.numero_telephone})
+
+
+@never_cache
+def page_facture(request, token):
+    from commandes.views_suivi import _f
+    c = (Commande.objects.select_related('professional_profile', 'client_profile')
+         .prefetch_related('articles__modele_disponible', 'paiements').filter(lien_suivi=token).first())
+    if c is None:
+        return render(request, 'suivi/page_suivi.html', {"trouve": False}, status=404)
+    if c.etape != 'LIVREE':
+        # Pas encore livrée : on montre le suivi à la place
+        from django.shortcuts import redirect
+        return redirect('suivi-public', token=token)
+    pro, cp = c.professional_profile, c.client_profile
+    articles = list(c.articles.all())
+    lignes = []
+    for a in articles:
+        nom = c.description if (c.description and len(articles) == 1) else \
+            (a.modele_disponible.nom if a.modele_disponible else (c.description or "Tenue sur mesure"))
+        if a.personne_nom:
+            nom += f" (pour {a.personne_nom})"
+        lignes.append({"nom": nom, "prix": a.prix_unitaire_snapshot or 0})
+    # Si les prix des articles ne font pas le total (prix fixé après coup), une seule ligne au total
+    if len(lignes) == 1 or sum(l["prix"] for l in lignes) != (c.total_commande or 0):
+        lignes = [{"nom": " + ".join(l["nom"] for l in lignes) or "Confection", "prix": c.total_commande or 0}]
+    moyens = dict(Commande.MOYEN_PAIEMENT_CHOICES)
+    return render(request, 'suivi/facture.html', {
+        "numero": numero_facture(c),
+        "date": c.etape_maj_le or c.date_creation,
+        "atelier": _nom_atelier(pro),
+        "tel_atelier": pro.numero_telephone,
+        "adresse_atelier": ", ".join(x for x in (pro.adresse, pro.quartier, pro.ville) if x),
+        "client": f"{cp.prenom or ''} {cp.nom or ''}".strip() or "Client",
+        "tel_client": cp.numero_telephone or '',
+        "commande": c.id,
+        "date_commande": c.date_creation,
+        "lignes": [{"nom": l["nom"], "prix": _f(l["prix"], c)} for l in lignes],
+        "total": _f(c.total_commande, c),
+        "paiements": [{"date": p.date, "moyen": moyens.get(p.moyen, p.moyen), "montant": _f(p.montant, c)}
+                      for p in c.paiements.all().order_by('date')],
+        "paye": _f(c.montant_paye, c),
+        "reste": _f(c.reste_a_payer, c),
+        "soldee": (c.reste_a_payer or 0) <= 0,
+        "lien_suivi": f"/s/{token}/",
+    })

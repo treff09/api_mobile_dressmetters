@@ -133,6 +133,8 @@ class CommandeSansAppliView(APIView):
       modele_disponible (id) OU image_personnalisee (photo du modèle) : l'un des deux est obligatoire
       description (facultative), image_tissu (photo du tissu, facultative : ajoutable plus tard)
       total, acompte (facultatifs ; par défaut ceux du modèle)
+      acompte_recu (oui par défaut) : l'acompte a été encaissé à l'atelier → compté comme payé
+      moyen : ESPECE (défaut) ou MOBILE_MONEY
       date_livraison (AAAA-MM-JJ), image_personnalisee (photo, facultative)
       mesures : liste [{libelle: id} ou {nom: "Tour de taille"}, valeur: 80]
                 (en multipart : chaîne JSON)
@@ -254,6 +256,20 @@ class CommandeSansAppliView(APIView):
             )
             ValeurMesureCommande.objects.bulk_create([
                 ValeurMesureCommande(article_commande=article, libelle_nom=n, valeur=v) for n, v in figees])
+            # Paiement convenu avec le client (il n'a pas l'appli pour le choisir lui-même)
+            moyen = 'MOBILE_MONEY' if str(d.get('moyen') or '').upper() == 'MOBILE_MONEY' else 'ESPECE'
+            commande.type_paiement = 'ACOMPTE' if 0 < acompte < total else 'TOTAL'
+            commande.moyen_paiement = moyen
+            commande.save(update_fields=['type_paiement', 'moyen_paiement', 'reste_a_payer'])
+            # Acompte déjà encaissé à l'atelier : noté comme argent reçu (hors appli)
+            recu = str(d.get('acompte_recu', 'true')).strip().lower() not in ('false', '0', 'non', 'no', '')
+            if recu and acompte > 0:
+                from core.models import PaiementCommande
+                from commandes.views_suivi import _recalculer_paiement
+                PaiementCommande.objects.create(commande=commande, montant=min(acompte, total) if total > 0 else acompte,
+                                                moyen=moyen, note="Acompte versé à la commande")
+                _recalculer_paiement(commande)
+                commande.save()
             commande.jeton_suivi()
 
         return Response({

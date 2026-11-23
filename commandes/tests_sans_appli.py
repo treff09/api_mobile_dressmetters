@@ -96,6 +96,17 @@ class SansAppliTests(TestCase):
         self.assertEqual(f.status_code, 200)
         self.assertEqual(self.client.get(f.data['lien_facture'].split('testserver')[-1]).status_code, 200)
 
+    def test_acompte_encaisse(self):
+        r = self.creer(moyen="MOBILE_MONEY")          # acompte 10000 sur 25000, reçu par défaut
+        c = Commande.objects.get(pk=r.data['id'])
+        self.assertEqual(c.type_paiement, 'ACOMPTE'); self.assertEqual(c.moyen_paiement, 'MOBILE_MONEY')
+        self.assertEqual(c.montant_paye, 10000); self.assertEqual(c.reste_a_payer, 15000)
+        self.assertEqual(c.statut_paiement, 'ACOMPTE_PAYE'); self.assertEqual(c.paiements.count(), 1)
+        r2 = self.creer(acompte_recu=False); c2 = Commande.objects.get(pk=r2.data['id'])
+        self.assertEqual(c2.montant_paye, 0); self.assertEqual(c2.acompte_demande, 10000)
+        r3 = self.creer(acompte="0"); c3 = Commande.objects.get(pk=r3.data['id'])
+        self.assertEqual(c3.type_paiement, 'TOTAL'); self.assertEqual(c3.paiements.count(), 0)
+
     def test_refus(self):
         self.assertEqual(self.creer(tel="12").status_code, 400)
         self.assertEqual(self.creer(modele_disponible="").status_code, 400)   # ni type ni modèle
